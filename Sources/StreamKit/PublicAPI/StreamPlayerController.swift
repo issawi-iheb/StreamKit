@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AVFoundation
 
 /// Controls an independent StreamKit playback instance.
 @MainActor
@@ -32,6 +33,9 @@ public final class StreamPlayerController {
     // MARK: - Private Properties
 
     private let engine: any PlaybackEngine
+    var renderingPlayer: AVPlayer? {
+        (engine as? AVFoundationPlaybackEngine)?.renderingPlayer
+    }
     private let snapshotBroadcaster = SnapshotBroadcaster()
 
     private var eventTask: Task<Void, Never>?
@@ -403,6 +407,12 @@ public final class StreamPlayerController {
                     failure: failure
                 )
             )
+            case .paused:
+                guard snapshot.intent == .pause else {
+                    return
+                }
+
+                updatePhase(.paused)
         }
     }
 

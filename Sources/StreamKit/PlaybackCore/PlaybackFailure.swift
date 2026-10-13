@@ -1,8 +1,7 @@
 import Foundation
 
 /// A failure encountered during media playback.
-public struct PlaybackFailure: Error, Equatable, Sendable {
-
+public struct PlaybackFailure: LocalizedError, Equatable, Sendable {
     /// The category of the playback failure.
     public enum Code: Equatable, Sendable {
         case invalidSource
@@ -18,11 +17,12 @@ public struct PlaybackFailure: Error, Equatable, Sendable {
     /// A human-readable description of the failure.
     public let message: String
 
-    public init(
-        code: Code,
-        message: String
-    ) {
+    public init(code: Code, message: String) {
         self.code = code
         self.message = message
+    }
+
+    public var errorDescription: String? {
+        message
     }
 }

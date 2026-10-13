@@ -18,6 +18,9 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     // MARK: - Properties
 
     private let player: AVPlayer
+    var renderingPlayer: AVPlayer {
+        player
+    }
 
     private let eventStream: AsyncStream<PlaybackEngineEventEnvelope>
     private var eventContinuation: AsyncStream<PlaybackEngineEventEnvelope>.Continuation?
@@ -345,9 +348,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             emit(.waiting)
 
         case .paused:
-            // Pause is initiated explicitly through pause().
-            // No paused event exists in PlaybackEngineEvent.
-            break
+            emit(.paused)
 
         @unknown default:
             break

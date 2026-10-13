@@ -19,6 +19,8 @@ enum PlaybackEngineEvent: Sendable {
     /// Playback has started or resumed.
     case playing
 
+    case paused
+
     /// Playback is waiting for data or another condition.
     case waiting
 

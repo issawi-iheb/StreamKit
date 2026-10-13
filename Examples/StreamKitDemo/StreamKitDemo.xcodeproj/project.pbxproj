@@ -1,0 +1,588 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		78F7B3F2307E8CB6001495B2 /* StreamKit in Frameworks */ = {isa = PBXBuildFile; productRef = 78F7B3F1307E8CB6001495B2 /* StreamKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		78F7B3D5307E8B4F001495B2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 78F7B3BF307E8B4D001495B2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 78F7B3C6307E8B4D001495B2;
+			remoteInfo = StreamKitDemo;
+		};
+		78F7B3DF307E8B4F001495B2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 78F7B3BF307E8B4D001495B2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 78F7B3C6307E8B4D001495B2;
+			remoteInfo = StreamKitDemo;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		78F7B3C7307E8B4D001495B2 /* StreamKitDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StreamKitDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		78F7B3D4307E8B4F001495B2 /* StreamKitDemoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StreamKitDemoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		78F7B3DE307E8B4F001495B2 /* StreamKitDemoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StreamKitDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		78F7B3C9307E8B4D001495B2 /* StreamKitDemo */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StreamKitDemo;
+			sourceTree = "<group>";
+		};
+		78F7B3D7307E8B4F001495B2 /* StreamKitDemoTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StreamKitDemoTests;
+			sourceTree = "<group>";
+		};
+		78F7B3E1307E8B4F001495B2 /* StreamKitDemoUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StreamKitDemoUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		78F7B3C4307E8B4D001495B2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				78F7B3F2307E8CB6001495B2 /* StreamKit in Frameworks */,
+			);
+		};
+		78F7B3D1307E8B4F001495B2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		78F7B3DB307E8B4F001495B2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		78F7B3BE307E8B4D001495B2 = {
+			isa = PBXGroup;
+			children = (
+				78F7B3C9307E8B4D001495B2 /* StreamKitDemo */,
+				78F7B3D7307E8B4F001495B2 /* StreamKitDemoTests */,
+				78F7B3E1307E8B4F001495B2 /* StreamKitDemoUITests */,
+				78F7B3F0307E8CB6001495B2 /* Frameworks */,
+				78F7B3C8307E8B4D001495B2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		78F7B3C8307E8B4D001495B2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				78F7B3C7307E8B4D001495B2 /* StreamKitDemo.app */,
+				78F7B3D4307E8B4F001495B2 /* StreamKitDemoTests.xctest */,
+				78F7B3DE307E8B4F001495B2 /* StreamKitDemoUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		78F7B3F0307E8CB6001495B2 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		78F7B3C6307E8B4D001495B2 /* StreamKitDemo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 78F7B3E6307E8B4F001495B2 /* Build configuration list for PBXNativeTarget "StreamKitDemo" */;
+			buildPhases = (
+				78F7B3C3307E8B4D001495B2 /* Sources */,
+				78F7B3C4307E8B4D001495B2 /* Frameworks */,
+				78F7B3C5307E8B4D001495B2 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				78F7B3C9307E8B4D001495B2 /* StreamKitDemo */,
+			);
+			name = StreamKitDemo;
+			packageProductDependencies = (
+				78F7B3F1307E8CB6001495B2 /* StreamKit */,
+			);
+			productName = StreamKitDemo;
+			productReference = 78F7B3C7307E8B4D001495B2 /* StreamKitDemo.app */;
+			productType = "com.apple.product-type.application";
+		};
+		78F7B3D3307E8B4F001495B2 /* StreamKitDemoTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 78F7B3E9307E8B4F001495B2 /* Build configuration list for PBXNativeTarget "StreamKitDemoTests" */;
+			buildPhases = (
+				78F7B3D0307E8B4F001495B2 /* Sources */,
+				78F7B3D1307E8B4F001495B2 /* Frameworks */,
+				78F7B3D2307E8B4F001495B2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				78F7B3D6307E8B4F001495B2 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				78F7B3D7307E8B4F001495B2 /* StreamKitDemoTests */,
+			);
+			name = StreamKitDemoTests;
+			productName = StreamKitDemoTests;
+			productReference = 78F7B3D4307E8B4F001495B2 /* StreamKitDemoTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		78F7B3DD307E8B4F001495B2 /* StreamKitDemoUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 78F7B3EC307E8B4F001495B2 /* Build configuration list for PBXNativeTarget "StreamKitDemoUITests" */;
+			buildPhases = (
+				78F7B3DA307E8B4F001495B2 /* Sources */,
+				78F7B3DB307E8B4F001495B2 /* Frameworks */,
+				78F7B3DC307E8B4F001495B2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				78F7B3E0307E8B4F001495B2 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				78F7B3E1307E8B4F001495B2 /* StreamKitDemoUITests */,
+			);
+			name = StreamKitDemoUITests;
+			productName = StreamKitDemoUITests;
+			productReference = 78F7B3DE307E8B4F001495B2 /* StreamKitDemoUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		78F7B3BF307E8B4D001495B2 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					78F7B3C6307E8B4D001495B2 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					78F7B3D3307E8B4F001495B2 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 78F7B3C6307E8B4D001495B2;
+					};
+					78F7B3DD307E8B4F001495B2 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 78F7B3C6307E8B4D001495B2;
+					};
+				};
+			};
+			buildConfigurationList = 78F7B3C2307E8B4D001495B2 /* Build configuration list for PBXProject "StreamKitDemo" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 78F7B3BE307E8B4D001495B2;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				78F7B3EF307E8C3D001495B2 /* XCLocalSwiftPackageReference "../../../StreamKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 78F7B3C8307E8B4D001495B2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				78F7B3C6307E8B4D001495B2 /* StreamKitDemo */,
+				78F7B3D3307E8B4F001495B2 /* StreamKitDemoTests */,
+				78F7B3DD307E8B4F001495B2 /* StreamKitDemoUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		78F7B3C5307E8B4D001495B2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		78F7B3D2307E8B4F001495B2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		78F7B3DC307E8B4F001495B2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		78F7B3C3307E8B4D001495B2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		78F7B3D0307E8B4F001495B2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		78F7B3DA307E8B4F001495B2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		78F7B3D6307E8B4F001495B2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 78F7B3C6307E8B4D001495B2 /* StreamKitDemo */;
+			targetProxy = 78F7B3D5307E8B4F001495B2 /* PBXContainerItemProxy */;
+		};
+		78F7B3E0307E8B4F001495B2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 78F7B3C6307E8B4D001495B2 /* StreamKitDemo */;
+			targetProxy = 78F7B3DF307E8B4F001495B2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		78F7B3E4307E8B4F001495B2 /* Debug configuration for PBXProject "StreamKitDemo" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = ZL8585FNG5;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		78F7B3E5307E8B4F001495B2 /* Release configuration for PBXProject "StreamKitDemo" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = ZL8585FNG5;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		78F7B3E7307E8B4F001495B2 /* Debug configuration for PBXNativeTarget "StreamKitDemo" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZL8585FNG5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = i2.StreamKitDemo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		78F7B3E8307E8B4F001495B2 /* Release configuration for PBXNativeTarget "StreamKitDemo" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZL8585FNG5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = i2.StreamKitDemo;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		78F7B3EA307E8B4F001495B2 /* Debug configuration for PBXNativeTarget "StreamKitDemoTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZL8585FNG5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = i2.StreamKitDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StreamKitDemo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StreamKitDemo";
+			};
+			name = Debug;
+		};
+		78F7B3EB307E8B4F001495B2 /* Release configuration for PBXNativeTarget "StreamKitDemoTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZL8585FNG5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = i2.StreamKitDemoTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StreamKitDemo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/StreamKitDemo";
+			};
+			name = Release;
+		};
+		78F7B3ED307E8B4F001495B2 /* Debug configuration for PBXNativeTarget "StreamKitDemoUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZL8585FNG5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = i2.StreamKitDemoUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = StreamKitDemo;
+			};
+			name = Debug;
+		};
+		78F7B3EE307E8B4F001495B2 /* Release configuration for PBXNativeTarget "StreamKitDemoUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ZL8585FNG5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = i2.StreamKitDemoUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = StreamKitDemo;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		78F7B3C2307E8B4D001495B2 /* Build configuration list for PBXProject "StreamKitDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				78F7B3E4307E8B4F001495B2 /* Debug configuration for PBXProject "StreamKitDemo" */,
+				78F7B3E5307E8B4F001495B2 /* Release configuration for PBXProject "StreamKitDemo" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		78F7B3E6307E8B4F001495B2 /* Build configuration list for PBXNativeTarget "StreamKitDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				78F7B3E7307E8B4F001495B2 /* Debug configuration for PBXNativeTarget "StreamKitDemo" */,
+				78F7B3E8307E8B4F001495B2 /* Release configuration for PBXNativeTarget "StreamKitDemo" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		78F7B3E9307E8B4F001495B2 /* Build configuration list for PBXNativeTarget "StreamKitDemoTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				78F7B3EA307E8B4F001495B2 /* Debug configuration for PBXNativeTarget "StreamKitDemoTests" */,
+				78F7B3EB307E8B4F001495B2 /* Release configuration for PBXNativeTarget "StreamKitDemoTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		78F7B3EC307E8B4F001495B2 /* Build configuration list for PBXNativeTarget "StreamKitDemoUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				78F7B3ED307E8B4F001495B2 /* Debug configuration for PBXNativeTarget "StreamKitDemoUITests" */,
+				78F7B3EE307E8B4F001495B2 /* Release configuration for PBXNativeTarget "StreamKitDemoUITests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		78F7B3EF307E8C3D001495B2 /* XCLocalSwiftPackageReference "../../../StreamKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../StreamKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		78F7B3F1307E8CB6001495B2 /* StreamKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 78F7B3EF307E8C3D001495B2 /* XCLocalSwiftPackageReference "../../../StreamKit" */;
+			productName = StreamKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 78F7B3BF307E8B4D001495B2 /* Project object */;
+	validationLevel = 1;
+}

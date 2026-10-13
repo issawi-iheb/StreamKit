@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  StreamPlayerControllerTests.swift
 //  StreamKit
 //
 //  Created by Iheb on 13/10/2026.
@@ -82,6 +82,101 @@ struct StreamPlayerControllerTests {
             !receivedStaleUpdate,
             "An event from source A must not modify source B's snapshot."
         )
+
+        await controller.shutdown()
+    }
+    @Test("Pausing updates the snapshot to paused")
+    func pauseUpdatesSnapshot() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let source = MediaSource(
+            url: URL(string: "https://example.com/video.m3u8")!
+        )
+
+        let handle = controller.load(source)
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        try await controller.play()
+
+        #expect(controller.snapshot.phase == .playing)
+        #expect(controller.snapshot.intent == .play)
+
+        await controller.pause()
+
+        #expect(controller.snapshot.phase == .paused)
+        #expect(controller.snapshot.intent == .pause)
+
+        await controller.shutdown()
+    }
+    @Test("A paused event does not override play intent")
+    func pausedEventDoesNotOverridePlayIntent() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let source = MediaSource(
+            url: URL(string: "https://example.com/video.m3u8")!
+        )
+
+        let handle = controller.load(source)
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        try await controller.play()
+
+        #expect(controller.snapshot.intent == .play)
+
+        engine.emit(.paused, fromLoad: 1)
+        engine.deliverQueuedEvents()
+
+        // Allow the controller's event task to process the event.
+        await Task.yield()
+
+        #expect(controller.snapshot.phase == .playing)
+        #expect(controller.snapshot.intent == .play)
+
+        await controller.shutdown()
+    }
+    @Test("A playing event does not override pause intent")
+    func playingEventDoesNotOverridePauseIntent() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let source = MediaSource(
+            url: URL(string: "https://example.com/video.m3u8")!
+        )
+
+        let handle = controller.load(source)
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        try await controller.play()
+        await controller.pause()
+
+        #expect(controller.snapshot.phase == .paused)
+        #expect(controller.snapshot.intent == .pause)
+
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+
+        // Allow the controller's event task to process the event.
+        await Task.yield()
+
+        #expect(controller.snapshot.phase == .paused)
+        #expect(controller.snapshot.intent == .pause)
 
         await controller.shutdown()
     }
