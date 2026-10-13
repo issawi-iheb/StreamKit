@@ -19,7 +19,7 @@
 /// automatically when buffering finishes. Therefore, the playback
 /// coordination logic must check the current intent when transitioning
 /// from a waiting state to determine whether to resume playback.
-public enum PlaybackIntent: Equatable {
+public enum PlaybackIntent: Equatable, Sendable {
     case play
     case pause
 }

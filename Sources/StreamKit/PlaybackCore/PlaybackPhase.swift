@@ -19,7 +19,7 @@
 /// - failed: An error occurred during playback or loading. The specific
 ///   error is not stored in this phase; check the associated failure
 ///   for details.
-public enum PlaybackPhase: Equatable {
+public enum PlaybackPhase: Equatable, Sendable {
     case idle
     case loading
     case ready

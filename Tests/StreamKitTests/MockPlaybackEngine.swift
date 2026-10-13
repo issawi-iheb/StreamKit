@@ -1,0 +1,123 @@
+import Foundation
+@testable import StreamKit
+
+@MainActor
+final class MockPlaybackEngine: PlaybackEngine {
+
+    let events: AsyncStream<PlaybackEngineEventEnvelope>
+    private let continuation: AsyncStream<PlaybackEngineEventEnvelope>.Continuation
+
+    private var pendingLoads: [Int: CheckedContinuation<Void, Error>] = [:]
+    private var registeredLoadIDs: Set<Int> = []
+    private var loadRegistrationWaiters: [
+        Int: [CheckedContinuation<Void, Never>]
+    ] = [:]
+
+    private var nextLoadID = 0
+    private var loadGenerations: [Int: UInt64] = [:]
+    private var queuedEvents: [PlaybackEngineEventEnvelope] = []
+    private(set) var loadSources: [MediaSource] = []
+
+
+    init() {
+        let stream = AsyncStream<PlaybackEngineEventEnvelope>.makeStream()
+        self.events = stream.stream
+        self.continuation = stream.continuation
+    }
+
+    // MARK: - Event Control
+
+    func emit(_ event: PlaybackEngineEvent, fromLoad loadID: Int) {
+        guard let generation = loadGenerations[loadID] else { return }
+
+        queuedEvents.append(
+            PlaybackEngineEventEnvelope(
+                generation: generation,
+                event: event
+            )
+        )
+    }
+
+    func deliverQueuedEvents() {
+        for event in queuedEvents {
+            continuation.yield(event)
+        }
+
+        queuedEvents.removeAll()
+    }
+
+    // MARK: - Load Control
+
+    func load(_ source: MediaSource, generation: UInt64) async throws {
+        nextLoadID += 1
+        let loadID = nextLoadID
+
+        loadSources.append(source)
+        loadGenerations[loadID] = generation
+        registeredLoadIDs.insert(loadID)
+
+        let waiters = loadRegistrationWaiters.removeValue(forKey: loadID) ?? []
+        for waiter in waiters {
+            waiter.resume()
+        }
+
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+
+            pendingLoads[loadID] = continuation
+        }
+    }
+
+    func waitForLoad(id: Int) async {
+        guard !registeredLoadIDs.contains(id) else {
+            return
+        }
+
+        await withCheckedContinuation {
+            (continuation: CheckedContinuation<Void, Never>) in
+
+            loadRegistrationWaiters[id, default: []].append(continuation)
+        }
+    }
+
+    func completeLoad(id: Int) {
+        guard let continuation = pendingLoads.removeValue(forKey: id) else {
+            return
+        }
+
+        continuation.resume()
+    }
+
+    func failLoad(id: Int, with error: Error) {
+        guard let continuation = pendingLoads.removeValue(forKey: id) else {
+            return
+        }
+
+        continuation.resume(throwing: error)
+    }
+
+    // MARK: - PlaybackEngine
+
+    func play() async throws {}
+
+    func pause() async {}
+
+    func seek(to time: TimeInterval) async throws {}
+
+    func shutdown() async {
+        for continuation in pendingLoads.values {
+            continuation.resume(throwing: CancellationError())
+        }
+
+        pendingLoads.removeAll()
+        continuation.finish()
+
+        for waiters in loadRegistrationWaiters.values {
+            for waiter in waiters {
+                waiter.resume()
+            }
+        }
+
+        loadRegistrationWaiters.removeAll()
+    }
+}
