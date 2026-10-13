@@ -103,6 +103,9 @@ struct StreamPlayerControllerTests {
         try await handle.waitUntilReady()
 
         try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await Task.yield()
 
         #expect(controller.snapshot.phase == .playing)
         #expect(controller.snapshot.intent == .play)
@@ -132,6 +135,9 @@ struct StreamPlayerControllerTests {
         try await handle.waitUntilReady()
 
         try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await Task.yield()
 
         #expect(controller.snapshot.intent == .play)
 
@@ -164,6 +170,10 @@ struct StreamPlayerControllerTests {
         try await handle.waitUntilReady()
 
         try await controller.play()
+        // Simulate playback actually starting.
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await Task.yield()
         await controller.pause()
 
         #expect(controller.snapshot.phase == .paused)
@@ -179,5 +189,93 @@ struct StreamPlayerControllerTests {
         #expect(controller.snapshot.intent == .pause)
 
         await controller.shutdown()
+    }
+    @Test("Waiting persists until playback resumes")
+    func waitingPersistsUntilPlaybackResumes() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let source = MediaSource(
+            url: URL(string: "https://example.com/video.m3u8")!
+        )
+
+        let handle = controller.load(source)
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await Task.yield()
+
+        #expect(controller.snapshot.phase == .playing)
+        #expect(controller.snapshot.intent == .play)
+
+        // Simulate buffering.
+        engine.emit(.waiting, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await Task.yield()
+
+        #expect(controller.snapshot.phase == .waiting)
+        #expect(controller.snapshot.intent == .play)
+
+        // Simulate playback resuming.
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await Task.yield()
+
+        #expect(controller.snapshot.phase == .playing)
+        #expect(controller.snapshot.intent == .play)
+
+        await controller.shutdown()
+    }
+
+    @Test("Controller does not report playing before receiving playing event")
+    func doesNotReportPlayingBeforeReceivingPlayingEvent() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let source = MediaSource(
+            url: URL(string: "https://example.com/video.m3u8")!
+        )
+
+        let handle = controller.load(source)
+
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        try await controller.play()
+
+        // play() returning does not prove that playback has started.
+        #expect(controller.snapshot.intent == .play)
+        #expect(controller.snapshot.phase != .playing)
+
+        await controller.shutdown()
+    }
+    
+    private func waitForPhase(
+        _ expectedPhase: PlaybackPhase,
+        controller: StreamPlayerController
+    ) async {
+        var snapshots = controller.snapshots.makeAsyncIterator()
+
+        while controller.snapshot.phase != expectedPhase {
+            guard let snapshot = await snapshots.next() else {
+                Issue.record("Snapshot stream ended before phase \(expectedPhase)")
+                return
+            }
+
+            if snapshot.phase == expectedPhase {
+                return
+            }
+        }
     }
 }

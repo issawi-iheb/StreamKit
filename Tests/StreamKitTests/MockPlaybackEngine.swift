@@ -98,7 +98,10 @@ final class MockPlaybackEngine: PlaybackEngine {
 
     // MARK: - PlaybackEngine
 
-    func play() async throws {}
+    func play() async throws {
+        // Intentionally emit no event.
+        // Tests must explicitly control when playback events occur.
+    }
 
     func pause() async {}
 

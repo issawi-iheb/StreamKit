@@ -234,15 +234,6 @@ public final class StreamPlayerController {
             guard !isShutdown else {
                 throw shutdownFailure()
             }
-
-            updateSnapshot(
-                PlaybackSnapshot(
-                    phase: .playing,
-                    intent: .play,
-                    currentTime: snapshot.currentTime,
-                    duration: snapshot.duration
-                )
-            )
         } catch {
             guard !isShutdown else {
                 throw shutdownFailure()

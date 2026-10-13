@@ -153,6 +153,13 @@ private struct PlayerScreen: View {
             Color.black
 
             StreamVideoView(controller: controller)
+            if snapshot.phase == .waiting {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.4)
+                    .accessibilityLabel("Buffering")
+                    .zIndex(1)
+            }
 
             if controlsVisible {
                 LinearGradient(
@@ -166,11 +173,7 @@ private struct PlayerScreen: View {
                     endPoint: .bottom
                 )
                 .allowsHitTesting(false)
-
-                controlsOverlay
-                    .transition(.opacity)
             }
-
             // Tap the video to show or hide the controls.
             Color.clear
                 .contentShape(Rectangle())
@@ -187,6 +190,7 @@ private struct PlayerScreen: View {
             }
         }
         .clipped()
+        .animation(.easeInOut(duration: 0.2), value: snapshot.phase)
     }
 
     private var controlsOverlay: some View {
