@@ -484,4 +484,74 @@ public final class StreamPlayerController {
             message: "The playback engine has been shut down."
         )
     }
+
+    // MARK: - Media Tracks
+    
+    private func validateTrackAccess() throws {
+        guard !isShutdown else {
+            throw shutdownFailure()
+        }
+
+        guard snapshot.phase != .idle,
+              snapshot.phase != .loading,
+              snapshot.phase != .failed
+        else {
+            throw PlaybackFailure(
+                code: .invalidSource,
+                message: "A ready media source is required to access tracks."
+            )
+        }
+    }
+
+    /// Returns the available audio tracks for the current media source.
+    public func availableAudioTracks() async throws -> [MediaTrack] {
+        try validateTrackAccess()
+        let generation = loadGeneration
+
+        let tracks = try await engine.availableAudioTracks()
+
+        guard !isShutdown, loadGeneration == generation else {
+            throw CancellationError()
+        }
+
+        return tracks
+    }
+
+    /// Returns the available subtitle tracks for the current media source.
+    public func availableSubtitleTracks() async throws -> [MediaTrack] {
+        try validateTrackAccess()
+        let generation = loadGeneration
+
+        let tracks = try await engine.availableSubtitleTracks()
+
+        guard !isShutdown, loadGeneration == generation else {
+            throw CancellationError()
+        }
+
+        return tracks
+    }
+
+    /// Selects an audio track by its identifier.
+    public func selectAudioTrack(id: String) async throws {
+        try validateTrackAccess()
+        let generation = loadGeneration
+
+        try await engine.selectAudioTrack(id: id)
+
+        guard !isShutdown, loadGeneration == generation else {
+            throw CancellationError()
+        }
+    }
+
+    /// Selects a subtitle track, or disables subtitles when `id` is `nil`.
+    public func selectSubtitleTrack(id: String?) async throws {
+        try validateTrackAccess()
+        let generation = loadGeneration
+
+        try await engine.selectSubtitleTrack(id: id)
+
+        guard !isShutdown, loadGeneration == generation else {
+            throw CancellationError()
+        }
+    }
 }

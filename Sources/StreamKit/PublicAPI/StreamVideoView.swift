@@ -6,6 +6,7 @@
 //
 
 #if os(iOS)
+
 import SwiftUI
 import AVFoundation
 
@@ -14,6 +15,7 @@ import AVFoundation
 /// Playback lifecycle remains owned by the controller.
 /// Removing this view does not stop playback.
 public struct StreamVideoView: View {
+
     private let controller: StreamPlayerController
 
     public init(controller: StreamPlayerController) {
@@ -22,12 +24,16 @@ public struct StreamVideoView: View {
 
     public var body: some View {
         StreamPlayerLayerView(controller: controller)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.black)
             .clipped()
     }
 }
 
+// MARK: - Player Layer
+
 private struct StreamPlayerLayerView: UIViewRepresentable {
+
     let controller: StreamPlayerController
 
     func makeUIView(context: Context) -> PlayerLayerUIView {
@@ -36,12 +42,18 @@ private struct StreamPlayerLayerView: UIViewRepresentable {
         return view
     }
 
-    func updateUIView(_ uiView: PlayerLayerUIView, context: Context) {
+    func updateUIView(
+        _ uiView: PlayerLayerUIView,
+        context: Context
+    ) {
         uiView.player = controller.renderingPlayer
     }
 }
 
+// MARK: - Player Layer View
+
 private final class PlayerLayerUIView: UIView {
+
     override class var layerClass: AnyClass {
         AVPlayerLayer.self
     }
@@ -60,4 +72,5 @@ private final class PlayerLayerUIView: UIView {
         }
     }
 }
+
 #endif

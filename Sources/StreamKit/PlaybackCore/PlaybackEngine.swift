@@ -31,4 +31,12 @@ protocol PlaybackEngine: AnyObject {
 
     /// Releases the engine's playback resources.
     func shutdown() async
+    
+    func availableAudioTracks() async throws -> [MediaTrack]
+
+    func availableSubtitleTracks() async throws -> [MediaTrack]
+
+    func selectAudioTrack(id: String) async throws
+
+    func selectSubtitleTrack(id: String?) async throws
 }

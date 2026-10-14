@@ -17,6 +17,13 @@ final class MockPlaybackEngine: PlaybackEngine {
     private var loadGenerations: [Int: UInt64] = [:]
     private var queuedEvents: [PlaybackEngineEventEnvelope] = []
     private(set) var loadSources: [MediaSource] = []
+    
+    var audioTracks: [MediaTrack] = []
+    var subtitleTracks: [MediaTrack] = []
+
+    private(set) var selectedAudioTrackID: String?
+    private(set) var selectedSubtitleTrackID: String?
+    private(set) var subtitleSelectionWasRequested = false
 
 
     init() {
@@ -122,5 +129,39 @@ final class MockPlaybackEngine: PlaybackEngine {
         }
 
         loadRegistrationWaiters.removeAll()
+    }
+    
+    func availableAudioTracks() async throws -> [MediaTrack] {
+        audioTracks
+    }
+
+    func availableSubtitleTracks() async throws -> [MediaTrack] {
+        subtitleTracks
+    }
+
+    func selectAudioTrack(id: String) async throws {
+        guard audioTracks.contains(where: { $0.id == id }) else {
+            throw PlaybackFailure(
+                code: .invalidSource,
+                message: "The requested audio track is unavailable."
+            )
+        }
+
+        selectedAudioTrackID = id
+    }
+
+    func selectSubtitleTrack(id: String?) async throws {
+        subtitleSelectionWasRequested = true
+
+        if let id {
+            guard subtitleTracks.contains(where: { $0.id == id }) else {
+                throw PlaybackFailure(
+                    code: .invalidSource,
+                    message: "The requested subtitle track is unavailable."
+                )
+            }
+        }
+
+        selectedSubtitleTrackID = id
     }
 }
