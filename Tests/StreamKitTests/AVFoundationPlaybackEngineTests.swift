@@ -98,4 +98,29 @@ struct AVFoundationPlaybackEngineTests {
 
         await engine.shutdown()
     }
+
+    @Test("Engine instances own independent players")
+    func engineInstancesOwnIndependentPlayers() async {
+        let engine1 = AVFoundationPlaybackEngine()
+        let engine2 = AVFoundationPlaybackEngine()
+
+        #expect(engine1.renderingPlayer !== engine2.renderingPlayer)
+
+        await engine1.shutdown()
+
+        // Shutting down engine1 must not affect engine2.
+        #expect(engine2.renderingPlayer.currentItem == nil)
+
+        // The second engine should still accept playback commands.
+        do {
+            try await engine2.play()
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .invalidSource)
+            #expect(failure.message == "Load a media source before playing.")
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+
+        await engine2.shutdown()
+    }
 }
