@@ -8,6 +8,11 @@ final class MockPlaybackEngine: PlaybackEngine {
     private let continuation: AsyncStream<PlaybackEngineEventEnvelope>.Continuation
 
     private var pendingLoads: [Int: CheckedContinuation<Void, Error>] = [:]
+    private var pendingSeeks: [Int: CheckedContinuation<Void, Error>] = [:]
+    private var registeredSeekIDs: Set<Int> = []
+    private var seekRegistrationWaiters: [Int: [CheckedContinuation<Void, Never>]] = [:]
+    private var nextSeekID = 0
+    private(set) var seekTimes: [TimeInterval] = []
     private var registeredLoadIDs: Set<Int> = []
     private var loadRegistrationWaiters: [
         Int: [CheckedContinuation<Void, Never>]
@@ -17,7 +22,7 @@ final class MockPlaybackEngine: PlaybackEngine {
     private var loadGenerations: [Int: UInt64] = [:]
     private var queuedEvents: [PlaybackEngineEventEnvelope] = []
     private(set) var loadSources: [MediaSource] = []
-    
+
     var audioTracks: [MediaTrack] = []
     var subtitleTracks: [MediaTrack] = []
 
@@ -103,6 +108,26 @@ final class MockPlaybackEngine: PlaybackEngine {
         continuation.resume(throwing: error)
     }
 
+    func waitForSeek(id: Int) async {
+        guard !registeredSeekIDs.contains(id) else {
+            return
+        }
+
+        await withCheckedContinuation {
+            (continuation: CheckedContinuation<Void, Never>) in
+
+            seekRegistrationWaiters[id, default: []].append(continuation)
+        }
+    }
+
+    func completeSeek(id: Int) {
+        guard let continuation = pendingSeeks.removeValue(forKey: id) else {
+            return
+        }
+
+        continuation.resume()
+    }
+
     // MARK: - PlaybackEngine
 
     func play() async throws {
@@ -112,7 +137,24 @@ final class MockPlaybackEngine: PlaybackEngine {
 
     func pause() async {}
 
-    func seek(to time: TimeInterval) async throws {}
+    func seek(to time: TimeInterval) async throws {
+        nextSeekID += 1
+        let seekID = nextSeekID
+
+        seekTimes.append(time)
+        registeredSeekIDs.insert(seekID)
+
+        let waiters = seekRegistrationWaiters.removeValue(forKey: seekID) ?? []
+        for waiter in waiters {
+            waiter.resume()
+        }
+
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, Error>) in
+
+            pendingSeeks[seekID] = continuation
+        }
+    }
 
     func shutdown() async {
         for continuation in pendingLoads.values {
@@ -130,7 +172,7 @@ final class MockPlaybackEngine: PlaybackEngine {
 
         loadRegistrationWaiters.removeAll()
     }
-    
+
     func availableAudioTracks() async throws -> [MediaTrack] {
         audioTracks
     }

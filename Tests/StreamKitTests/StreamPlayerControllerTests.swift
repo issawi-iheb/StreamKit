@@ -86,6 +86,206 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("A stale load completion must not override a newer load")
+    func staleLoadCompletionDoesNotOverrideNewerLoad() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let sourceA = MediaSource(
+            url: URL(string: "https://example.com/a.mp4")!
+        )
+        let sourceB = MediaSource(
+            url: URL(string: "https://example.com/b.mp4")!
+        )
+
+        let loadA = controller.load(sourceA)
+        await engine.waitForLoad(id: 1)
+
+        #expect(controller.snapshot.phase == .loading)
+
+        let loadB = controller.load(sourceB)
+        await engine.waitForLoad(id: 2)
+
+        #expect(controller.snapshot.phase == .loading)
+
+        // A is now stale. Completing it must not make the controller ready.
+        engine.completeLoad(id: 1)
+
+        do {
+            try await loadA.waitUntilReady()
+            Issue.record("The stale load unexpectedly succeeded.")
+        } catch is CancellationError {
+            // Expected: load A was superseded by load B.
+        }
+
+        #expect(controller.snapshot.phase == .loading)
+
+        // Only B may transition the controller to ready.
+        engine.completeLoad(id: 2)
+        try await loadB.waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.currentTime == 0)
+
+        await controller.shutdown()
+    }
+
+    @Test("A stale load failure must not override a newer load")
+    func staleLoadFailureDoesNotOverrideNewerLoad() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let sourceA = MediaSource(
+            url: URL(string: "https://example.com/a.mp4")!
+        )
+        let sourceB = MediaSource(
+            url: URL(string: "https://example.com/b.mp4")!
+        )
+
+        let loadA = controller.load(sourceA)
+        await engine.waitForLoad(id: 1)
+
+        let loadB = controller.load(sourceB)
+        await engine.waitForLoad(id: 2)
+
+        #expect(controller.snapshot.phase == .loading)
+
+        // Fail A after B has superseded it.
+        engine.failLoad(
+            id: 1,
+            with: PlaybackFailure(
+                code: .playback,
+                message: "Stale load failure"
+            )
+        )
+        _ = try? await loadA.waitUntilReady()
+
+        // A's failure must not overwrite B's loading state.
+        #expect(controller.snapshot.phase == .loading)
+        #expect(controller.snapshot.failure == nil)
+
+        engine.completeLoad(id: 2)
+        try await loadB.waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.failure == nil)
+
+        await controller.shutdown()
+    }
+
+    @Test("A seek interrupted by a new load must not update the snapshot")
+    func seekInterruptedByNewLoadDoesNotUpdateSnapshot() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let sourceA = MediaSource(
+            url: URL(string: "https://example.com/a.mp4")!
+        )
+        let sourceB = MediaSource(
+            url: URL(string: "https://example.com/b.mp4")!
+        )
+
+        // Load A and wait until it is ready.
+        let loadA = controller.load(sourceA)
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await loadA.waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+
+        // Suspend a seek on A.
+        let seekTask = Task {
+            try await controller.seek(to: 42)
+        }
+
+        await engine.waitForSeek(id: 1)
+        #expect(engine.seekTimes == [42])
+
+        // Loading B changes the generation while the seek is suspended.
+        let loadB = controller.load(sourceB)
+        await engine.waitForLoad(id: 2)
+
+        #expect(controller.snapshot.phase == .loading)
+
+        // Allow the old seek to return. Its generation is now stale.
+        engine.completeSeek(id: 1)
+
+        do {
+            try await seekTask.value
+            Issue.record("The seek unexpectedly succeeded after a new load started.")
+        } catch is CancellationError {
+            // Expected: the seek belongs to the previous load generation.
+        } catch {
+            Issue.record("Expected CancellationError, got: \(error)")
+        }
+
+        // The stale seek must not update the new source's snapshot.
+        #expect(controller.snapshot.phase == .loading)
+        #expect(controller.snapshot.currentTime == 0)
+
+        engine.completeLoad(id: 2)
+        try await loadB.waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.currentTime == 0)
+
+        await controller.shutdown()
+    }
+
+    @Test("Shutdown during loading leaves the controller idle")
+    func shutdownDuringLoadingLeavesControllerIdle() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let source = MediaSource(
+            url: URL(string: "https://example.com/a.mp4")!
+        )
+
+        // Start loading and leave the engine operation pending.
+        let load = controller.load(source)
+        await engine.waitForLoad(id: 1)
+
+        #expect(controller.snapshot.phase == .loading)
+
+        // Shutdown invalidates and cancels the active load.
+        await controller.shutdown()
+
+        #expect(controller.snapshot.phase == .idle)
+        #expect(controller.snapshot.intent == .pause)
+        #expect(controller.snapshot.failure == nil)
+
+        // The pending load must not report success after shutdown.
+        do {
+            try await load.waitUntilReady()
+            Issue.record("The load unexpectedly succeeded after shutdown.")
+        } catch {
+            // Expected: shutdown prevents the pending load from succeeding.
+        }
+
+        // Completing or failing the old load must not change the final snapshot.
+        engine.completeLoad(id: 1)
+
+        #expect(controller.snapshot.phase == .idle)
+        #expect(controller.snapshot.intent == .pause)
+
+        // Shutdown should remain safe when called more than once.
+        await controller.shutdown()
+
+        #expect(controller.snapshot.phase == .idle)
+    }
+
     @Test("Pausing updates the snapshot to paused")
     func pauseUpdatesSnapshot() async throws {
         let engine = MockPlaybackEngine()
@@ -384,7 +584,7 @@ struct StreamPlayerControllerTests {
 
         await controller.shutdown()
     }
-    
+
     @Test("Track discovery fails before loading a source")
     func trackDiscoveryFailsBeforeLoading() async {
         let engine = MockPlaybackEngine()
@@ -445,7 +645,7 @@ struct StreamPlayerControllerTests {
             // Expected: the controller has been shut down.
         }
     }
-    
+
     private func waitForPhase(
         _ expectedPhase: PlaybackPhase,
         controller: StreamPlayerController
