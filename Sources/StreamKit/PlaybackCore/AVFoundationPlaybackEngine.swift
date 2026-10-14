@@ -585,12 +585,14 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             )
         }
 
-        guard player.currentItem != nil else {
+        guard let item = player.currentItem else {
             throw PlaybackFailure(
                 code: .invalidSource,
                 message: "Load a media source before seeking."
             )
         }
+
+        let generation = loadGeneration
 
         let target = CMTime(
             seconds: time,
@@ -602,6 +604,10 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             toleranceBefore: .zero,
             toleranceAfter: .zero
         )
+
+        guard isCurrentItem(item, generation: generation) else {
+            throw CancellationError()
+        }
 
         guard completed else {
             throw CancellationError()
