@@ -1,227 +1,16 @@
 //
-//  ContentView.swift
+//  DemoPlayerView.swift
 //  StreamKitDemo
 //
-//  Created by Iheb on 13/10/2026.
+//  Created by Iheb on 14/10/2026.
 //
 
-import SwiftUI
+import Foundation
 import StreamKit
-
-// MARK: - Content View
-
-@MainActor
-struct ContentView: View {
-    @State private var controller = StreamPlayerController()
-
-    @State private var snapshot = PlaybackSnapshot(
-        phase: .idle,
-        intent: .pause
-    )
-
-    @State private var errorMessage: String?
-    @State private var isFullscreen = false
-
-    // Shared between embedded and fullscreen player.
-    @State private var trackState = PlayerTrackState()
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    PlayerScreen(
-                        controller: controller,
-                        snapshot: snapshot,
-                        trackState: trackState,
-                        isFullscreen: false,
-                        onFullscreen: {
-                            isFullscreen = true
-                        }
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("StreamKit Demo")
-                            .font(.title2.bold())
-
-                        Text("HLS • AVFoundation")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 16)
-
-                    if let errorMessage {
-                        Label(
-                            errorMessage,
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 16)
-                    }
-
-                    Spacer(minLength: 20)
-                }
-                .padding(.top, 12)
-            }
-            .background(Color(uiColor: .systemBackground))
-            .toolbar(.hidden, for: .navigationBar)
-        }
-        .fullScreenCover(isPresented: $isFullscreen) {
-            PlayerScreen(
-                controller: controller,
-                snapshot: snapshot,
-                trackState: trackState,
-                isFullscreen: true,
-                onFullscreen: {
-                    isFullscreen = false
-                }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.black)
-            .ignoresSafeArea()
-        }
-        .task {
-            guard let url = URL(
-                string: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
-            ) else {
-                errorMessage = "Invalid media URL."
-                return
-            }
-
-            let handle = controller.load(MediaSource(url: url))
-
-            do {
-                try await handle.waitUntilReady()
-                try await controller.play()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-        .task {
-            for await newSnapshot in controller.snapshots {
-                snapshot = newSnapshot
-            }
-        }
-    }
-}
-
-// MARK: - Shared Track State
+import SwiftUI
 
 @MainActor
-@Observable
-private final class PlayerTrackState {
-    private(set) var audioTracks: [MediaTrack] = []
-    private(set) var subtitleTracks: [MediaTrack] = []
-
-    private(set) var selectedAudioID: String?
-    private(set) var selectedSubtitleID: String?
-
-    private(set) var isLoading = false
-    var errorMessage: String?
-
-    private var hasLoadedTracks = false
-
-    var hasAudioTracks: Bool {
-        !audioTracks.isEmpty
-    }
-
-    var hasSubtitleTracks: Bool {
-        !subtitleTracks.isEmpty
-    }
-
-    var selectedAudioName: String {
-        audioTracks.first {
-            $0.id == selectedAudioID
-        }?.name ?? "Audio"
-    }
-
-    var selectedSubtitleName: String {
-        guard let selectedSubtitleID else {
-            return "Off"
-        }
-
-        return subtitleTracks.first {
-            $0.id == selectedSubtitleID
-        }?.name ?? "Subtitles"
-    }
-
-    func load(using controller: StreamPlayerController) async {
-        guard !hasLoadedTracks, !isLoading else {
-            return
-        }
-
-        isLoading = true
-        errorMessage = nil
-
-        defer {
-            isLoading = false
-        }
-
-        do {
-            async let audioResult = controller.availableAudioTracks()
-            async let subtitleResult = controller.availableSubtitleTracks()
-
-            let loadedAudio = try await audioResult
-            let loadedSubtitles = try await subtitleResult
-
-            guard !Task.isCancelled else {
-                return
-            }
-
-            audioTracks = loadedAudio
-            subtitleTracks = loadedSubtitles
-            hasLoadedTracks = true
-        } catch {
-            guard !Task.isCancelled else {
-                return
-            }
-
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func selectAudio(
-        _ id: String,
-        using controller: StreamPlayerController
-    ) async {
-        guard !isLoading else {
-            return
-        }
-
-        errorMessage = nil
-
-        do {
-            try await controller.selectAudioTrack(id: id)
-            selectedAudioID = id
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func selectSubtitle(
-        _ id: String?,
-        using controller: StreamPlayerController
-    ) async {
-        guard !isLoading else {
-            return
-        }
-
-        errorMessage = nil
-
-        do {
-            try await controller.selectSubtitleTrack(id: id)
-            selectedSubtitleID = id
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-}
-
-// MARK: - Player Screen
-
-@MainActor
-private struct PlayerScreen: View {
+struct DemoPlayerView: View {
     let controller: StreamPlayerController
     let snapshot: PlaybackSnapshot
     let trackState: PlayerTrackState
@@ -265,6 +54,7 @@ private struct PlayerScreen: View {
             }
         }
         .background(.black)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: snapshot.currentTime) { _, newTime in
             guard !isSeeking else {
                 return
@@ -393,6 +183,7 @@ private struct PlayerScreen: View {
             .clipped()
         }
         .background(.black)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: Playback Controls
@@ -409,13 +200,18 @@ private struct PlayerScreen: View {
 
             HStack {
                 if isFullscreen {
-                    Button(action: onFullscreen) {
+                    Button {
+                        print("EXIT FULLSCREEN TAPPED")
+                        onFullscreen()
+                    } label: {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 16, weight: .semibold))
                             .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
+                            .background(.black.opacity(0.25), in: Circle())
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
+                    .zIndex(10)
                     .accessibilityLabel("Exit full screen")
                 } else {
                     Text("STREAMKIT")
@@ -507,6 +303,7 @@ private struct PlayerScreen: View {
                     }
                 )
                 .tint(.white)
+                .frame(height: 20)
                 .disabled(
                     snapshot.duration == nil ||
                     snapshot.phase == .idle ||
@@ -560,7 +357,13 @@ private struct PlayerScreen: View {
         }
         .foregroundStyle(.white)
         .padding(.horizontal, horizontalPadding)
-        .padding(.vertical, isFullscreen ? 16 : 8)
+        .padding(
+            .top,
+            isFullscreen
+                ? (height > width ? 60 : 16)
+                : 8
+        )
+        .padding(.bottom, isFullscreen ? 16 : 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
