@@ -13,6 +13,7 @@ final class MockPlaybackEngine: PlaybackEngine {
     private var seekRegistrationWaiters: [Int: [CheckedContinuation<Void, Never>]] = [:]
     private var nextSeekID = 0
     private(set) var seekTimes: [TimeInterval] = []
+    private(set) var playbackRate: Float = 1.0
     private var registeredLoadIDs: Set<Int> = []
     private var loadRegistrationWaiters: [
         Int: [CheckedContinuation<Void, Never>]
@@ -136,6 +137,10 @@ final class MockPlaybackEngine: PlaybackEngine {
     }
 
     func pause() async {}
+
+    func setPlaybackRate(_ rate: Float) async throws {
+        playbackRate = rate
+    }
 
     func seek(to time: TimeInterval) async throws {
         nextSeekID += 1

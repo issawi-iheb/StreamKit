@@ -21,12 +21,17 @@ struct DemoPlayerView: View {
     @State private var isSeeking = false
     @State private var seekPosition: Double = 0
 
-    private enum TrackMenu: Equatable {
-        case audio
-        case subtitles
-    }
+    @State private var playbackRate: Float = 1.0
+    @State private var playbackRateError: String?
 
-    @State private var activeTrackMenu: TrackMenu?
+    private let playbackRates: [Float] = [
+        0.5,
+        0.75,
+        1.0,
+        1.25,
+        1.5,
+        2.0
+    ]
 
     private var duration: Double {
         max(snapshot.duration ?? 0, 1)
@@ -79,10 +84,9 @@ struct DemoPlayerView: View {
 
             await trackState.load(using: controller)
         }
-        .task(id: controlsVisible && isPlaying && activeTrackMenu == nil) {
+        .task(id: controlsVisible && isPlaying) {
             guard controlsVisible,
-                  isPlaying,
-                  activeTrackMenu == nil else {
+                  isPlaying else {
                 return
             }
 
@@ -92,9 +96,7 @@ struct DemoPlayerView: View {
                 return
             }
 
-            guard !Task.isCancelled,
-                  isPlaying,
-                  activeTrackMenu == nil else {
+            guard !Task.isCancelled, isPlaying else {
                 return
             }
 
@@ -160,15 +162,7 @@ struct DemoPlayerView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         withAnimation(.easeInOut(duration: 0.22)) {
-                            if controlsVisible {
-                                if activeTrackMenu != nil {
-                                    activeTrackMenu = nil
-                                } else {
-                                    controlsVisible = false
-                                }
-                            } else {
-                                controlsVisible = true
-                            }
+                            controlsVisible.toggle()
                         }
                     }
                     .allowsHitTesting(!controlsVisible)
@@ -183,26 +177,8 @@ struct DemoPlayerView: View {
                     )
                     .zIndex(2)
 
-                    if let activeTrackMenu {
-                        VStack {
-                            Spacer()
-
-                            HStack {
-                                Spacer()
-
-                                trackMenu(for: activeTrackMenu)
-                                    .frame(width: 240)
-                                    .padding(.trailing, isFullscreen ? 30 : 56)
-                                    .padding(.bottom, isFullscreen ? 100 : 96)
-                            }
-                        }
-                        .frame(
-                            width: geometry.size.width,
-                            height: geometry.size.height
-                        )
-                        .zIndex(3)
-                    }
-                }            }
+                }
+            }
             .clipped()
         }
         .background(.black)
@@ -244,28 +220,136 @@ struct DemoPlayerView: View {
 
     @ViewBuilder
     private var topBar: some View {
-        if isFullscreen {
-            HStack(spacing: 12) {
+        HStack(spacing: 12) {
+            if isFullscreen {
                 glassCircleButton(
                     symbol: "xmark",
                     label: "Exit full screen"
                 ) {
                     onFullscreen()
                 }
-
-                Spacer()
-            }
-        } else {
-            HStack {
+            } else {
                 Text("STREAMKIT")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.8)
                     .foregroundStyle(.white.opacity(0.65))
                     .padding(.leading, 4)
-
-                Spacer()
             }
+
+            Spacer()
         }
+    }
+
+    private var audioMenu: some View {
+        Menu {
+            ForEach(trackState.audioTracks) { track in
+                Button {
+                    Task {
+                        await trackState.selectAudio(
+                            track.id,
+                            using: controller
+                        )
+                    }
+                } label: {
+                    if trackState.selectedAudioID == track.id {
+                        Label(track.name, systemImage: "checkmark")
+                    } else {
+                        Text(track.name)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "waveform")
+                .font(.system(size: 18, weight: .medium))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Audio")
+        .disabled(!canAccessTracks || trackState.isLoading)
+    }
+
+    private var subtitlesMenu: some View {
+        Menu {
+            Button {
+                Task {
+                    await trackState.selectSubtitle(
+                        nil,
+                        using: controller
+                    )
+                }
+            } label: {
+                if trackState.selectedSubtitleID == nil {
+                    Label("Off", systemImage: "checkmark")
+                } else {
+                    Text("Off")
+                }
+            }
+
+            ForEach(trackState.subtitleTracks) { track in
+                Button {
+                    Task {
+                        await trackState.selectSubtitle(
+                            track.id,
+                            using: controller
+                        )
+                    }
+                } label: {
+                    if trackState.selectedSubtitleID == track.id {
+                        Label(track.name, systemImage: "checkmark")
+                    } else {
+                        Text(track.name)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "captions.bubble")
+                .font(.system(size: 18, weight: .medium))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Subtitles")
+        .disabled(!canAccessTracks || trackState.isLoading)
+    }
+
+    private var playbackRateButton: some View {
+        Menu {
+            ForEach(playbackRates, id: \.self) { rate in
+                Button {
+                    setPlaybackRate(rate)
+                } label: {
+                    if playbackRate == rate {
+                        Label(
+                            playbackRateLabel(rate),
+                            systemImage: "checkmark"
+                        )
+                    } else {
+                        Text(playbackRateLabel(rate))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "speedometer")
+                    .font(.system(size: 15, weight: .medium))
+
+                Text(playbackRateLabel(playbackRate))
+                    .font(.system(size: 13, weight: .semibold))
+                    .monospacedDigit()
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, 10)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Playback speed")
+        .accessibilityValue(playbackRateLabel(playbackRate))
+        .accessibilityHint("Choose a playback speed")
+    }
+
+    private func playbackRateLabel(_ rate: Float) -> String {
+        "\(rate.formatted(.number.precision(.fractionLength(0...2))))×"
     }
 
     private func glassCircleButton(
@@ -369,6 +453,13 @@ struct DemoPlayerView: View {
         let displayedTime = isSeeking ? seekPosition : snapshot.currentTime
 
         return VStack(alignment: .leading, spacing: isFullscreen ? 12 : 6) {
+            if let playbackRateError {
+                Text(playbackRateError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             // Title + track buttons on the same row
             HStack(alignment: .bottom, spacing: 12) {
                 Spacer(minLength: 12)
@@ -438,240 +529,25 @@ struct DemoPlayerView: View {
 
     // MARK: Track Controls
 
+    // MARK: Track Controls
+
     @ViewBuilder
     private var trackControls: some View {
-        if trackState.hasAudioTracks || trackState.hasSubtitleTracks {
-            HStack(spacing: isFullscreen ? 8 : 2) {
-                if trackState.hasAudioTracks {
-                    trackButton(
-                        symbol: "waveform",
-                        title: "Audio",
-                        menu: .audio
-                    ) {
-                        openMenu(.audio)
-                    }
-                }
-
-                if trackState.hasSubtitleTracks {
-                    trackButton(
-                        symbol: "captions.bubble",
-                        title: "Subtitles",
-                        menu: .subtitles
-                    ) {
-                        openMenu(.subtitles)
-                    }
-                }
-            }
-            .padding(.horizontal, 6)
-            .playerGlass(Capsule(), interactive: false)
-        }
-    }
-
-    private func trackButton(
-        symbol: String,
-        title: String,
-        menu: TrackMenu,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background {
-                    if activeTrackMenu == menu {
-                        Circle().fill(.white.opacity(0.18))
-                    }
-                }
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .disabled(!canAccessTracks || trackState.isLoading)
-    }
-
-    private func openMenu(_ menu: TrackMenu) {
-        guard canAccessTracks else {
-            return
-        }
-
-        withAnimation(.easeInOut(duration: 0.18)) {
-            controlsVisible = true
-            activeTrackMenu =
-                activeTrackMenu == menu ? nil : menu
-        }
-    }
-
-    // MARK: Track Menus
-
-    private func trackMenu(
-        for menu: TrackMenu
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Menu title
-
-            HStack {
-                Text(menuTitle(menu))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-
-                Spacer(minLength: 12)
-
-                Button {
-                    closeMenu()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close \(menuTitle(menu)) menu")
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
-            Rectangle()
-                .fill(.white.opacity(0.14))
-                .frame(height: 0.5)
-
-            if trackState.isLoading {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .tint(.white)
-
-                    Text("Loading…")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(16)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        switch menu {
-                        case .audio:
-                            ForEach(trackState.audioTracks) { track in
-                                trackRow(
-                                    title: track.name,
-                                    isSelected:
-                                        trackState.selectedAudioID == track.id
-                                ) {
-                                    await trackState.selectAudio(
-                                        track.id,
-                                        using: controller
-                                    )
-                                }
-                            }
-
-                        case .subtitles:
-                            trackRow(
-                                title: "Off",
-                                isSelected:
-                                    trackState.selectedSubtitleID == nil
-                            ) {
-                                await trackState.selectSubtitle(
-                                    nil,
-                                    using: controller
-                                )
-                            }
-
-                            ForEach(trackState.subtitleTracks) { track in
-                                trackRow(
-                                    title: track.name,
-                                    isSelected:
-                                        trackState.selectedSubtitleID == track.id
-                                ) {
-                                    await trackState.selectSubtitle(
-                                        track.id,
-                                        using: controller
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                .frame(maxHeight: 240)
-                .scrollIndicators(.visible)
+        HStack(spacing: 4) {
+            if trackState.hasAudioTracks {
+                audioMenu
             }
 
-            if let message = trackState.errorMessage {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .fixedSize(
-                        horizontal: false,
-                        vertical: true
-                    )
-                    .padding(10)
+            if trackState.hasSubtitleTracks {
+                subtitlesMenu
+            }
+
+            if canAccessTracks {
+                playbackRateButton
             }
         }
-        .frame(width: 240)
-        .environment(\.colorScheme, .dark)
-        .clipShape(RoundedRectangle(cornerRadius: 22))
-        .playerGlass(
-            RoundedRectangle(cornerRadius: 22),
-            interactive: false
-        )
-    }
-
-    private func menuTitle(
-        _ menu: TrackMenu
-    ) -> String {
-        switch menu {
-        case .audio:
-            return "Audio"
-        case .subtitles:
-            return "Subtitles"
-        }
-    }
-
-    private func trackRow(
-        title: String,
-        isSelected: Bool,
-        action: @escaping () async -> Void
-    ) -> some View {
-        Button {
-            Task {
-                await action()
-            }
-        } label: {
-            HStack(spacing: 12) {
-                Text(title)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-
-                Spacer(minLength: 8)
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-            }
-            .padding(.horizontal, 12)
-            .frame(minHeight: 40)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(.white.opacity(0.10))
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(trackState.isLoading)
-    }
-
-    private func closeMenu() {
-        withAnimation(.easeInOut(duration: 0.18)) {
-            activeTrackMenu = nil
-        }
+        .padding(.horizontal, 6)
+        .playerGlass(Capsule(), interactive: false)
     }
 
     // MARK: Playback
@@ -690,6 +566,18 @@ struct DemoPlayerView: View {
                 }
             } catch {
                 // Playback errors are reported by the controller.
+            }
+        }
+    }
+
+    private func setPlaybackRate(_ rate: Float) {
+        Task {
+            do {
+                try await controller.setPlaybackRate(rate)
+                playbackRate = rate
+                playbackRateError = nil
+            } catch {
+                playbackRateError = error.localizedDescription
             }
         }
     }

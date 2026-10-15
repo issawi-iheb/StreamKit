@@ -25,6 +25,7 @@ protocol PlaybackEngine: AnyObject {
 
     /// Pauses playback.
     func pause() async
+    func setPlaybackRate(_ rate: Float) async throws
 
     /// Seeks to a position in seconds.
     func seek(to time: TimeInterval) async throws

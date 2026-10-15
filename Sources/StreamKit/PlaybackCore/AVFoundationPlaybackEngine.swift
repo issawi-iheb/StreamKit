@@ -44,6 +44,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     private var pendingLoadGeneration: UInt64?
 
     private var isShutdown = false
+    private var playbackRate: Float = 1.0
 
     var events: AsyncStream<PlaybackEngineEventEnvelope> {
         eventStream
@@ -342,6 +343,12 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
         switch status {
         case .playing:
+        // Apply the selected rate once playback has actually started.
+        // This also supports platforms where defaultRate is unavailable.
+            if player.rate != playbackRate {
+                player.rate = playbackRate
+            }
+
             emit(.playing)
 
         case .waitingToPlayAtSpecifiedRate:
@@ -562,6 +569,11 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             )
         }
 
+        if #available(iOS 16.0, macOS 13.0, tvOS 16.0, *) {
+            player.defaultRate = playbackRate
+        }
+
+        // Preserve AVPlayer's normal buffering and waiting behavior.
         player.play()
     }
 
@@ -571,6 +583,30 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         }
 
         player.pause()
+    }
+
+    func setPlaybackRate(_ rate: Float) async throws {
+        guard !isShutdown else {
+            throw shutdownFailure()
+        }
+
+        guard rate.isFinite, rate > 0 else {
+            throw PlaybackFailure(
+                code: .invalidPlaybackRate,
+                message: "The playback rate must be finite and greater than zero."
+            )
+        }
+
+        playbackRate = rate
+
+        if #available(iOS 16.0, macOS 13.0, tvOS 16.0, *) {
+            player.defaultRate = rate
+        }
+
+        // Changing the rate must not start paused or waiting playback.
+        if player.timeControlStatus == .playing {
+            player.rate = rate
+        }
     }
 
     func seek(to time: TimeInterval) async throws {

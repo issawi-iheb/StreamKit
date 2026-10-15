@@ -294,6 +294,31 @@ public final class StreamPlayerController {
         }
     }
 
+    /// Sets the playback rate for this player.
+    ///
+    /// The rate must be finite and greater than zero. The selected rate
+    /// is retained when a new source is loaded.
+    ///
+    /// Changing the rate does not start playback or change playback intent.
+    public func setPlaybackRate(_ rate: Float) async throws {
+        guard !isShutdown else {
+            throw shutdownFailure()
+        }
+
+        guard rate.isFinite, rate > 0 else {
+            throw PlaybackFailure(
+                code: .invalidPlaybackRate,
+                message: "The playback rate must be finite and greater than zero."
+            )
+        }
+
+        try await engine.setPlaybackRate(rate)
+
+        guard !isShutdown else {
+            throw shutdownFailure()
+        }
+    }
+
     /// Seeks to the specified position, in seconds.
     public func seek(to time: TimeInterval) async throws {
         guard !isShutdown else {

@@ -123,4 +123,62 @@ struct AVFoundationPlaybackEngineTests {
 
         await engine2.shutdown()
     }
+
+    @Test("Invalid playback rates are rejected by the engine")
+    func invalidPlaybackRatesAreRejected() async {
+        let invalidRates: [Float] = [
+            0, -1, .nan, .infinity, -.infinity
+        ]
+
+        let engine = AVFoundationPlaybackEngine()
+
+        for rate in invalidRates {
+            do {
+                try await engine.setPlaybackRate(rate)
+                Issue.record("Expected playback rate \(rate) to be rejected")
+            } catch let failure as PlaybackFailure {
+                #expect(failure.code == .invalidPlaybackRate)
+            } catch {
+                Issue.record(
+                    "Unexpected error for playback rate \(rate): \(error)"
+                )
+            }
+        }
+
+        await engine.shutdown()
+    }
+
+    @Test("Playback rate can be configured before loading")
+    func playbackRateCanBeConfiguredBeforeLoading() async throws {
+        let engine = AVFoundationPlaybackEngine()
+
+        try await engine.setPlaybackRate(1.5)
+
+        #expect(engine.renderingPlayer.rate == 0)
+
+        if #available(iOS 16.0, macOS 13.0, tvOS 16.0, *) {
+            #expect(engine.renderingPlayer.defaultRate == 1.5)
+        }
+
+        await engine.shutdown()
+    }
+
+    @Test("Setting playback rate after shutdown throws a playback failure")
+    func setPlaybackRateAfterShutdownThrows() async {
+        let engine = AVFoundationPlaybackEngine()
+
+        await engine.shutdown()
+
+        do {
+            try await engine.setPlaybackRate(1.5)
+            Issue.record("Expected playback-rate change to fail after shutdown")
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .playback)
+            #expect(
+                failure.message == "The playback engine has been shut down."
+            )
+        } catch {
+            Issue.record("Unexpected error after shutdown: \(error)")
+        }
+    }
 }

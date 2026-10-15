@@ -5,6 +5,7 @@ public struct PlaybackFailure: LocalizedError, Equatable, Sendable {
     /// The category of the playback failure.
     public enum Code: Equatable, Sendable {
         case invalidSource
+        case invalidPlaybackRate
         case unsupportedFormat
         case network
         case playback
