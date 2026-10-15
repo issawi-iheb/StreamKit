@@ -38,9 +38,12 @@ struct DemoPlayerView: View {
     }
 
     private var canAccessTracks: Bool {
-        snapshot.phase == .ready ||
-        snapshot.phase == .playing ||
-        snapshot.phase == .waiting
+        switch snapshot.phase {
+        case .ready, .playing, .paused, .waiting:
+            true
+        case .idle, .loading, .ended, .failed:
+            false
+        }
     }
 
     var body: some View {
@@ -168,6 +171,7 @@ struct DemoPlayerView: View {
                             }
                         }
                     }
+                    .allowsHitTesting(!controlsVisible)
                     .zIndex(1)
 
                 if controlsVisible {
@@ -178,8 +182,27 @@ struct DemoPlayerView: View {
                             hasRoomForSeparateTrackButtons
                     )
                     .zIndex(2)
-                }
-            }
+
+                    if let activeTrackMenu {
+                        VStack {
+                            Spacer()
+
+                            HStack {
+                                Spacer()
+
+                                trackMenu(for: activeTrackMenu)
+                                    .frame(width: 240)
+                                    .padding(.trailing, isFullscreen ? 30 : 56)
+                                    .padding(.bottom, isFullscreen ? 100 : 96)
+                            }
+                        }
+                        .frame(
+                            width: geometry.size.width,
+                            height: geometry.size.height
+                        )
+                        .zIndex(3)
+                    }
+                }            }
             .clipped()
         }
         .background(.black)
@@ -193,170 +216,20 @@ struct DemoPlayerView: View {
         height: CGFloat,
         hasRoomForSeparateTrackButtons: Bool
     ) -> some View {
-        let horizontalPadding: CGFloat = isFullscreen ? 30 : 14
-
-        return VStack(spacing: 0) {
-            // Top bar
-
-            HStack {
-                if isFullscreen {
-                    Button {
-                        print("EXIT FULLSCREEN TAPPED")
-                        onFullscreen()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 44, height: 44)
-                            .background(.black.opacity(0.25), in: Circle())
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .zIndex(10)
-                    .accessibilityLabel("Exit full screen")
-                } else {
-                    Text("STREAMKIT")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(1.8)
-                        .foregroundStyle(.white.opacity(0.65))
-                        .padding(.leading, 4)
-                }
-
-                Spacer()
-            }
+        VStack(spacing: 0) {
+            topBar
 
             Spacer(minLength: 8)
 
-            // Center playback controls
-
-            HStack(spacing: isFullscreen ? 44 : 30) {
-                skipButton(
-                    seconds: -10,
-                    symbol: "gobackward.10",
-                    label: "Skip backward 10 seconds"
-                )
-
-                Button {
-                    togglePlayback()
-                } label: {
-                    Image(
-                        systemName: isPlaying
-                            ? "pause.fill"
-                            : "play.fill"
-                    )
-                    .font(.system(size: 23, weight: .semibold))
-                    .contentTransition(.symbolEffect(.replace))
-                    .offset(x: isPlaying ? 0 : 2)
-                    .frame(
-                        width: isFullscreen ? 58 : 54,
-                        height: isFullscreen ? 58 : 54
-                    )
-                    .background(
-                        .white.opacity(0.18),
-                        in: Circle()
-                    )
-                    .overlay {
-                        Circle()
-                            .strokeBorder(
-                                .white.opacity(0.28),
-                                lineWidth: 0.8
-                            )
-                    }
-                    .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(isPlaying ? "Pause" : "Play")
-
-                skipButton(
-                    seconds: 10,
-                    symbol: "goforward.10",
-                    label: "Skip forward 10 seconds"
-                )
-            }
+            centerControls
 
             Spacer(minLength: 8)
 
-            // Timeline and secondary controls
-
-            VStack(spacing: 2) {
-                Slider(
-                    value: $seekPosition,
-                    in: 0...duration,
-                    onEditingChanged: { editing in
-                        isSeeking = editing
-
-                        guard !editing else {
-                            return
-                        }
-
-                        let target = min(
-                            max(seekPosition, 0),
-                            duration
-                        )
-
-                        Task {
-                            do {
-                                try await controller.seek(to: target)
-                            } catch {
-                                seekPosition = snapshot.currentTime
-                            }
-                        }
-                    }
-                )
-                .tint(.white)
-                .frame(height: 20)
-                .disabled(
-                    snapshot.duration == nil ||
-                    snapshot.phase == .idle ||
-                    snapshot.phase == .loading
-                )
-                .accessibilityLabel("Playback position")
-
-                HStack(spacing: 12) {
-                    Text(
-                        formatTime(
-                            isSeeking
-                                ? seekPosition
-                                : snapshot.currentTime
-                        )
-                    )
-                    .foregroundStyle(.white.opacity(0.95))
-
-                    Spacer(minLength: 4)
-
-                    trackControls(
-                        hasRoomForSeparateButtons:
-                            hasRoomForSeparateTrackButtons
-                    )
-
-                    if !isFullscreen {
-                        Button(action: onFullscreen) {
-                            Image(
-                                systemName:
-                                    "arrow.up.left.and.arrow.down.right"
-                            )
-                            .font(.system(size: 14, weight: .medium))
-                            .frame(width: 36, height: 36)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Enter full screen")
-                    }
-
-                    Text(
-                        remainingTime(
-                            current: isSeeking
-                                ? seekPosition
-                                : snapshot.currentTime,
-                            duration: snapshot.duration
-                        )
-                    )
-                    .foregroundStyle(.white.opacity(0.75))
-                }
-                .font(.system(size: 11, weight: .medium).monospacedDigit())
-            }
+            bottomBar
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, horizontalPadding)
+        .environment(\.colorScheme, .dark)
+        .padding(.horizontal, isFullscreen ? 30 : 14)
         .padding(
             .top,
             isFullscreen
@@ -367,33 +240,230 @@ struct DemoPlayerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // MARK: Top Bar
+
+    @ViewBuilder
+    private var topBar: some View {
+        if isFullscreen {
+            HStack(spacing: 12) {
+                glassCircleButton(
+                    symbol: "xmark",
+                    label: "Exit full screen"
+                ) {
+                    onFullscreen()
+                }
+
+                Spacer()
+            }
+        } else {
+            HStack {
+                Text("STREAMKIT")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.8)
+                    .foregroundStyle(.white.opacity(0.65))
+                    .padding(.leading, 4)
+
+                Spacer()
+            }
+        }
+    }
+
+    private func glassCircleButton(
+        symbol: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .playerGlass(Circle())
+        .accessibilityLabel(label)
+    }
+
+    // MARK: Center Controls
+
+    private var centerControls: some View {
+        let playSize: CGFloat = isFullscreen ? 92 : 56
+
+        return HStack(spacing: isFullscreen ? 68 : 28) {
+            skipButton(
+                seconds: -10,
+                symbol: "gobackward.10",
+                label: "Skip backward 10 seconds"
+            )
+
+            Button {
+                togglePlayback()
+            } label: {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(
+                        .system(
+                            size: isFullscreen ? 38 : 24,
+                            weight: .semibold
+                        )
+                    )
+                    .contentTransition(.symbolEffect(.replace))
+                    .offset(x: isPlaying ? 0 : 3)
+                    .frame(width: playSize, height: playSize)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .playerGlass(Circle())
+            .accessibilityLabel(isPlaying ? "Pause" : "Play")
+
+            skipButton(
+                seconds: 10,
+                symbol: "goforward.10",
+                label: "Skip forward 10 seconds"
+            )
+        }
+    }
+
+    private func skipButton(
+        seconds: Double,
+        symbol: String,
+        label: String
+    ) -> some View {
+        let size: CGFloat = isFullscreen ? 64 : 44
+
+        return Button {
+            let target = min(
+                max(snapshot.currentTime + seconds, 0),
+                snapshot.duration ?? .greatestFiniteMagnitude
+            )
+
+            Task {
+                do {
+                    try await controller.seek(to: target)
+                } catch {
+                    // The current snapshot remains authoritative.
+                }
+            }
+        } label: {
+            Image(systemName: symbol)
+                .font(
+                    .system(
+                        size: isFullscreen ? 28 : 20,
+                        weight: .regular
+                    )
+                )
+                .frame(width: size, height: size)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .playerGlass(Circle())
+        .accessibilityLabel(label)
+        .disabled(
+            snapshot.phase == .idle ||
+            snapshot.phase == .loading
+        )
+    }
+
+    // MARK: Bottom Bar
+
+    private var bottomBar: some View {
+        let displayedTime = isSeeking ? seekPosition : snapshot.currentTime
+
+        return VStack(alignment: .leading, spacing: isFullscreen ? 12 : 6) {
+            // Title + track buttons on the same row
+            HStack(alignment: .bottom, spacing: 12) {
+                Spacer(minLength: 12)
+
+                trackControls
+
+                if !isFullscreen {
+                    Button(action: onFullscreen) {
+                        Image(
+                            systemName: "arrow.up.left.and.arrow.down.right"
+                        )
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Enter full screen")
+                }
+            }
+
+            // Elapsed — progress bar — remaining
+            HStack(spacing: 12) {
+                Text(formatTime(displayedTime))
+                    .foregroundStyle(.white.opacity(0.7))
+
+                PlayerProgressBar(
+                    value: $seekPosition,
+                    range: 0...duration,
+                    onEditingChanged: handleSeekEditing
+                )
+                .disabled(
+                    snapshot.duration == nil ||
+                    snapshot.phase == .idle ||
+                    snapshot.phase == .loading
+                )
+                .accessibilityLabel("Playback position")
+
+                Text(
+                    remainingTime(
+                        current: displayedTime,
+                        duration: snapshot.duration
+                    )
+                )
+                .foregroundStyle(.white.opacity(0.7))
+            }
+            .font(.system(size: 13, weight: .medium).monospacedDigit())
+        }
+    }
+
+    private func handleSeekEditing(_ editing: Bool) {
+        isSeeking = editing
+
+        guard !editing else {
+            return
+        }
+
+        let target = min(max(seekPosition, 0), duration)
+
+        Task {
+            do {
+                try await controller.seek(to: target)
+            } catch {
+                seekPosition = snapshot.currentTime
+            }
+        }
+    }
+
     // MARK: Track Controls
 
-    private func trackControls(
-        hasRoomForSeparateButtons: Bool
-    ) -> some View {
-        HStack(spacing: hasRoomForSeparateButtons ? 8 : 2) {
-            if trackState.hasAudioTracks {
-                trackButton(
-                    symbol: "waveform",
-                    title: "Audio",
-                    menu: .audio,
-                    showsTitle: hasRoomForSeparateButtons
-                ) {
-                    openMenu(.audio)
+    @ViewBuilder
+    private var trackControls: some View {
+        if trackState.hasAudioTracks || trackState.hasSubtitleTracks {
+            HStack(spacing: isFullscreen ? 8 : 2) {
+                if trackState.hasAudioTracks {
+                    trackButton(
+                        symbol: "waveform",
+                        title: "Audio",
+                        menu: .audio
+                    ) {
+                        openMenu(.audio)
+                    }
                 }
-            }
 
-            if trackState.hasSubtitleTracks {
-                trackButton(
-                    symbol: "captions.bubble",
-                    title: "Subtitles",
-                    menu: .subtitles,
-                    showsTitle: hasRoomForSeparateButtons
-                ) {
-                    openMenu(.subtitles)
+                if trackState.hasSubtitleTracks {
+                    trackButton(
+                        symbol: "captions.bubble",
+                        title: "Subtitles",
+                        menu: .subtitles
+                    ) {
+                        openMenu(.subtitles)
+                    }
                 }
             }
+            .padding(.horizontal, 6)
+            .playerGlass(Capsule(), interactive: false)
         }
     }
 
@@ -401,49 +471,23 @@ struct DemoPlayerView: View {
         symbol: String,
         title: String,
         menu: TrackMenu,
-        showsTitle: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: symbol)
-                    .font(.system(size: 15, weight: .medium))
-
-                if showsTitle {
-                    Text(title)
-                        .font(.system(size: 12, weight: .medium))
+            Image(systemName: symbol)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background {
+                    if activeTrackMenu == menu {
+                        Circle().fill(.white.opacity(0.18))
+                    }
                 }
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, showsTitle ? 10 : 8)
-            .frame(minWidth: 36, minHeight: 36)
-            .background {
-                if activeTrackMenu == menu {
-                    Capsule()
-                        .fill(.white.opacity(0.16))
-                }
-            }
-            .contentShape(Capsule())
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
         .disabled(!canAccessTracks || trackState.isLoading)
-        .overlay(alignment: .bottomTrailing) {
-            if activeTrackMenu == menu {
-                trackMenu(for: menu)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .offset(y: -44)
-                    .zIndex(4)
-                    .transition(
-                        .opacity.combined(
-                            with: .scale(
-                                scale: 0.96,
-                                anchor: .bottomTrailing
-                            )
-                        )
-                    )
-            }
-        }
     }
 
     private func openMenu(_ menu: TrackMenu) {
@@ -564,24 +608,11 @@ struct DemoPlayerView: View {
             }
         }
         .frame(width: 240)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.black.opacity(0.82))
-                .background(.ultraThinMaterial)
-        }
         .environment(\.colorScheme, .dark)
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(
-                    .white.opacity(0.12),
-                    lineWidth: 0.5
-                )
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(
-            color: .black.opacity(0.25),
-            radius: 16,
-            y: 5
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .playerGlass(
+            RoundedRectangle(cornerRadius: 22),
+            interactive: false
         )
     }
 
@@ -643,40 +674,6 @@ struct DemoPlayerView: View {
         }
     }
 
-    // MARK: Skip
-
-    private func skipButton(
-        seconds: Double,
-        symbol: String,
-        label: String
-    ) -> some View {
-        Button {
-            let target = min(
-                max(snapshot.currentTime + seconds, 0),
-                snapshot.duration ?? .greatestFiniteMagnitude
-            )
-
-            Task {
-                do {
-                    try await controller.seek(to: target)
-                } catch {
-                    // The current snapshot remains authoritative.
-                }
-            }
-        } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 24, weight: .regular))
-                .frame(width: 44, height: 48)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .disabled(
-            snapshot.phase == .idle ||
-            snapshot.phase == .loading
-        )
-    }
-
     // MARK: Playback
 
     private func togglePlayback() {
@@ -721,5 +718,77 @@ struct DemoPlayerView: View {
 
         let remaining = max(duration - current, 0)
         return "−\(formatTime(remaining))"
+    }
+}
+
+// MARK: - Liquid Glass helper
+
+extension View {
+    /// Liquid Glass on iOS 26+, ultra-thin material before that.
+    @ViewBuilder
+    func playerGlass<S: Shape>(
+        _ shape: S,
+        interactive: Bool = true
+    ) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(
+                interactive ? .regular.interactive() : .regular,
+                in: shape
+            )
+        } else {
+            self.background(.ultraThinMaterial, in: shape)
+        }
+    }
+}
+
+// MARK: - Progress bar (thick capsule, no thumb)
+
+struct PlayerProgressBar: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var onEditingChanged: (Bool) -> Void = { _ in }
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isDragging = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let span = max(range.upperBound - range.lowerBound, 0.0001)
+            let fraction = min(max((value - range.lowerBound) / span, 0), 1)
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.white.opacity(0.28))
+
+                Capsule()
+                    .fill(.white.opacity(0.92))
+                    .frame(width: geometry.size.width * fraction)
+            }
+            .frame(height: isDragging ? 12 : 8)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        if !isDragging {
+                            isDragging = true
+                            onEditingChanged(true)
+                        }
+
+                        let x = min(
+                            max(drag.location.x / geometry.size.width, 0),
+                            1
+                        )
+                        value = range.lowerBound + x * span
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        onEditingChanged(false)
+                    }
+            )
+            .animation(.easeOut(duration: 0.15), value: isDragging)
+        }
+        .frame(height: 24)
+        .opacity(isEnabled ? 1 : 0.5)
     }
 }
