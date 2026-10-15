@@ -27,7 +27,7 @@ class PlayerViewModel: ObservableObject {
     private let controller = StreamPlayerController()
     @Published var snapshot: PlaybackSnapshot
     private var observationTask: Task<Void, Never>? = nil
-    
+
     init() {
         // Observe playback state changes
         self.snapshot = controller.snapshot
@@ -37,11 +37,11 @@ class PlayerViewModel: ObservableObject {
             }
         }
     }
-    
+
     func loadMedia(url: URL) {
         let mediaSource = MediaSource(url: url)
         let loadHandle = controller.load(mediaSource)
-        
+
         Task {
             do {
                 try await loadHandle.waitUntilReady()
@@ -53,7 +53,7 @@ class PlayerViewModel: ObservableObject {
             }
         }
     }
-    
+
     func togglePlayback() {
         Task {
             if snapshot.phase == .playing || snapshot.phase == .waiting {
@@ -63,13 +63,13 @@ class PlayerViewModel: ObservableObject {
             }
         }
     }
-    
+
     func seek(to time: TimeInterval) {
         Task {
             try? await controller.seek(to: time)
         }
     }
-    
+
     // Call when view disappears or player is no longer needed
     func cleanup() async {
         observationTask?.cancel()
