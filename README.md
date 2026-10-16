@@ -211,3 +211,5 @@ See the [StreamKitDemo](Examples/StreamKitDemo/) target for a complete example s
 - Concurrent independent players
 - Error handling scenarios
 - Host-scoped bearer authentication for protected HLS streams
+
+The demo's separate **Protected Playback** section is prefilled with a public Mux HLS sample (`https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`) and its trusted host. Leave the token blank to check ordinary HLS playback. To exercise bearer authentication, replace the URL and trusted-host list with a protected stream you control and enter its valid development token. The public sample is not bearer-protected and does not verify authenticated playback.

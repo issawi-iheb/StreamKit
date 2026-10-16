@@ -34,3 +34,4 @@
 - HLS playlist references are rewritten to the resource-loader scheme so tokens can be requested for segments, keys, and child playlists.
 - The async token provider is called per resource, allowing the host app to refresh credentials.
 - Exact host allowlisting and HTTPS-only transport prevent credentials from being sent to unrelated or cleartext origins.
+- The demo presents bearer-authenticated playback as a separate example. It is prefilled with a public Mux HLS stream so ordinary playback can be checked without credentials; supplying a token enables the bearer-authenticated path for a protected origin. The public sample does not verify bearer authentication.

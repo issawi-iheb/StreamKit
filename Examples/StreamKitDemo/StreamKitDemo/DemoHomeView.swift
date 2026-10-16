@@ -33,22 +33,24 @@ struct DemoHomeView: View {
                     }
 
                     NavigationLink {
-                        BearerAuthenticatedPlayerDemoView()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Bearer Authentication",
-                            subtitle: "Protected HLS with host-scoped tokens",
-                            symbol: "lock.shield"
-                        )
-                    }
-
-                    NavigationLink {
                         PlaylistDemoView()
                     } label: {
                         DemoNavigationRow(
                             title: "Playlist",
                             subtitle: "Planned demo — not implemented yet.",
                             symbol: "list.bullet.rectangle"
+                        )
+                    }
+                }
+
+                Section("Protected Playback") {
+                    NavigationLink {
+                        BearerAuthenticatedPlayerDemoView()
+                    } label: {
+                        DemoNavigationRow(
+                            title: "Bearer-Authenticated HLS",
+                            subtitle: "Play a protected stream with a host-scoped token",
+                            symbol: "lock.shield"
                         )
                     }
                 }

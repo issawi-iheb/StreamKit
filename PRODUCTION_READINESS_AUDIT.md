@@ -392,7 +392,7 @@ This follow-up supersedes the corresponding open items above where code or verif
 ### Completed in the current workspace
 
 - `MediaRequestConfiguration` offers scoped cookies, a user-agent, and host-scoped bearer authentication. Bearer mode routes HTTPS resources through an `AVAssetResourceLoader`, adds an `Authorization: Bearer` header per request, and rewrites HLS child-resource references. Exact host allowlisting and HTTPS-only transport limit credential exposure. Cookie domain/path scoping must match the media and its HLS child requests.
-- The authenticated playback demo accepts a protected HLS URL, an access token, and exact trusted hosts. It does not include or persist a real credential.
+- The authenticated playback demo is separated in its own Protected Playback menu section. It is prefilled with Mux's public HLS test stream and trusted host; a blank token loads it as ordinary HLS, while a supplied token enables the authenticated request path for a protected URL. The example contains no real credential. The public Mux stream is only a basic playback baseline and does not validate bearer authentication.
 - Added tests cover token/header creation per resource, host scoping, cookie/user-agent/range request fields, HLS child URL rewriting, HTTPS URL mapping, and rejection of insecure HTTP children.
 - Added a UI test that opens the bearer-auth demo and checks its URL, trusted-host, token, and load controls.
 - Added `PlaybackFailureMapping` for `NSURLErrorDomain`, common AVFoundation parse/format errors, and wrapped underlying errors. Messages are stable and do not expose raw URLs or request details. Other AVFoundation failures remain `.playback`.
@@ -404,10 +404,11 @@ This follow-up supersedes the corresponding open items above where code or verif
 - `swift test`: **79 tests passed in 10 suites** on macOS arm64 (Xcode 27.0 toolchain).
 - `git diff --check`: clean.
 - `xcodebuild build-for-testing` succeeded for the generic iOS Simulator destination, compiling the SDK, demo, and UI test bundle. Simulator test execution/runtime checks could not run because CoreSimulatorService was unavailable and no simulator runtime could be enumerated. No physical iOS device verification was possible.
+- The updated sample menu and flow also compiled with `xcodebuild build-for-testing`; its bearer-auth UI test compiled but could not run without CoreSimulator. The public Mux stream has not been treated as an authenticated-origin test.
 
 ### Remaining blockers to Phase 1 completion
 
-- Bearer resource loading and playlist rewriting have unit coverage but have not been exercised against a live protected HLS origin on iOS. Validate segment/key requests, range behavior, CDN redirects, token expiry/refresh, and AVFoundation cancellation on simulator/device before advertising support broadly.
+- Bearer resource loading and playlist rewriting have unit coverage but have not been exercised against a live protected HLS origin on iOS. No reusable public HLS endpoint with bearer-protected playlists and segments was identified; the public sample only checks basic playback. Use a controlled protected origin to validate segment/key requests, range behavior, CDN redirects, token expiry/refresh, and AVFoundation cancellation on simulator/device before advertising support broadly.
 - Audio-session interruption/background behavior, real media/network playback, and minimum-supported iOS behavior still need simulator/device validation.
 - Demo UI behavior and teardown compile for the generic iOS Simulator target but have not been exercised at runtime because simulator services are unavailable.
 - The 32× rate ceiling remains an SDK policy pending product confirmation.

@@ -7,8 +7,8 @@ struct BearerAuthenticatedPlayerDemoView: View {
     @State private var snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
     @State private var trackState = PlayerTrackState()
 
-    @State private var mediaURL = ""
-    @State private var trustedHosts = ""
+    @State private var mediaURL = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    @State private var trustedHosts = "test-streams.mux.dev"
     @State private var bearerToken = ""
     @State private var errorMessage: String?
     @State private var isLoading = false
@@ -16,7 +16,7 @@ struct BearerAuthenticatedPlayerDemoView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Enter an HTTPS HLS URL and a development bearer token. List every exact host that may serve the playlist, segments, keys, or redirects.")
+                Text("A public HLS sample is prefilled so you can check basic playback. To test bearer authentication, replace it with your protected HTTPS stream and enter a valid development token. List every exact host that may serve playlists, segments, keys, or redirects.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -42,7 +42,7 @@ struct BearerAuthenticatedPlayerDemoView: View {
                     if isLoading {
                         ProgressView().frame(maxWidth: .infinity)
                     } else {
-                        Label("Load protected stream", systemImage: "lock.open")
+                        Label("Load HLS stream", systemImage: "play.fill")
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -99,10 +99,10 @@ struct BearerAuthenticatedPlayerDemoView: View {
         guard let url = URL(string: mediaURL),
               url.scheme?.lowercased() == "https",
               let host = url.host,
-              !bearerToken.isEmpty
+              trustedHostSet.contains(host.lowercased())
         else { return false }
 
-        return trustedHostSet.contains(host.lowercased())
+        return true
     }
 
     private var trustedHostSet: Set<String> {
@@ -116,28 +116,31 @@ struct BearerAuthenticatedPlayerDemoView: View {
         guard let url = URL(string: mediaURL),
               url.scheme?.lowercased() == "https",
               let host = url.host,
-              !bearerToken.isEmpty,
               trustedHostSet.contains(host.lowercased())
         else {
-            errorMessage = "Enter a valid HTTPS URL, token, and trusted host list that includes the media host."
+            errorMessage = "Enter a valid HTTPS URL and trusted host list that includes the media host."
             return
         }
 
         isLoading = true
         errorMessage = nil
 
-        let token = bearerToken
-        let authentication = MediaBearerAuthentication(
-            trustedHosts: trustedHostSet
-        ) { _ in token }
-        let handle = controller.load(
-            MediaSource(
+        let source: MediaSource
+        if bearerToken.isEmpty {
+            source = MediaSource(url: url)
+        } else {
+            let token = bearerToken
+            let authentication = MediaBearerAuthentication(
+                trustedHosts: trustedHostSet
+            ) { _ in token }
+            source = MediaSource(
                 url: url,
                 requestConfiguration: MediaRequestConfiguration(
                     bearerAuthentication: authentication
                 )
             )
-        )
+        }
+        let handle = controller.load(source)
 
         Task {
             defer { isLoading = false }

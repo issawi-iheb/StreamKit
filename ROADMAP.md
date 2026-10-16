@@ -41,11 +41,11 @@ separate integration boundaries for DRM and advertising.
 - **In progress** — Regression coverage includes unknown-duration updates, repeated overlapping loads, explicit cancellation, and pending-item cleanup; real live AVFoundation behavior remains unverified.
 - **Assessed, not implemented** — No audio-session interruption or app-background handling exists in the SDK or demo. The controller now reports `.paused` while preserving `.play` intent when the engine pauses. The host app should configure process-wide `AVAudioSession`; resume policy and background behavior need definition before Phase 5.
 - **Implemented, pending live iOS validation** — `MediaBearerAuthentication` supplies per-resource bearer tokens through a custom AVFoundation resource loader; HLS child URLs are rewritten, HTTPS is required, and tokens are scoped to exact trusted hosts. Generic arbitrary-header configuration remains absent.
-- **Implemented, not iOS-verified** — The demo includes protected HLS URL/token/host inputs, displays runtime `snapshot.failure`, and shuts down player controllers when their owning views leave. Playlist/Playback Events remain planned placeholders; a UI navigation assertion was added.
+- **Implemented, not iOS-verified** — The demo has a separate Protected Playback menu section, prefilled with a public Mux HLS baseline and its trusted host. A blank token loads ordinary HLS; entering a token exercises the bearer path for a protected URL. This public sample is not an authenticated stream. Runtime `snapshot.failure` is displayed and player controllers shut down when their owning views leave. Playlist/Playback Events remain planned placeholders; a UI navigation assertion was added.
 - **Verified by unit tests** — 79 Swift package tests pass, including per-resource token refresh callbacks, request construction, host scoping, playlist rewriting, insecure-child rejection, and authentication-error propagation.
 
 ### NEXT:
-- Verify bearer authentication against live protected HLS on iOS: master and child playlists, segments, keys, range requests, CDN redirects, token refresh, and cancellation.
+- Arrange a controlled HTTPS HLS origin that requires a bearer header, then verify master and child playlists, segments, keys, range requests, CDN redirects, token refresh, and cancellation on iOS. Public HLS samples found so far do not provide reusable bearer-protected media.
 - Validate failure mappings against representative real AVFoundation failures and refine unmapped cases.
 - Confirm audio-session ownership and interruption-state semantics before Phase 5 implementation.
 - Verify playback, cancellation, backgrounding, and routing on iOS 16+ devices and additional supported OS versions.
@@ -116,9 +116,9 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Latest commit**: 29d9411 (Add playback rate support and improve demo player controls)
+- **Latest commit**: 048241d (Add bearer-authenticated HLS playback)
 - **Current phase**: Phase 1 — Core stabilization and production readiness
-- **Workspace changes since that commit**: shutdown observer cleanup, playback-rate upper bound, documentation corrections, and added regression tests; these changes are not committed.
+- **Workspace changes since that commit**: the protected-playback demo menu separation, prefilled public HLS baseline with optional bearer flow, updated UI test selector, and corresponding documentation updates; these changes are not committed.
 - **Latest test result**: 79 Swift tests in 10 suites passed on macOS arm64; generic iOS Simulator build-for-testing succeeded for the SDK, demo, and UI test bundle. CoreSimulatorService was unavailable, so simulator/device runtime and OS-version verification has not been performed.
 - **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes a 2026-10-16 reassessment. StreamKit is not yet production-ready against Phase 1 criteria.
 - **Next milestone**: Validate bearer-authenticated HLS on iOS against a protected origin (including child resources, CDN redirects, token refresh, and cancellation), then complete remaining Phase 1 device checks.

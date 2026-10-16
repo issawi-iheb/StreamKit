@@ -38,12 +38,12 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["Bearer Authentication"].tap()
+        app.buttons["Bearer-Authenticated HLS"].tap()
 
         XCTAssertTrue(app.textFields["HTTPS media URL"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.textFields["Trusted media hosts"].exists)
         XCTAssertTrue(app.secureTextFields["Bearer token"].exists)
-        XCTAssertTrue(app.buttons["Load protected stream"].exists)
+        XCTAssertTrue(app.buttons["Load HLS stream"].exists)
     }
 
     @MainActor
