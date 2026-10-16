@@ -42,10 +42,13 @@ separate integration boundaries for DRM and advertising.
 - **Assessed, not implemented** — No audio-session interruption or app-background handling exists in the SDK or demo. The controller now reports `.paused` while preserving `.play` intent when the engine pauses. The host app should configure process-wide `AVAudioSession`; resume policy and background behavior need definition before Phase 5.
 - **Implemented, pending live iOS validation** — `MediaBearerAuthentication` supplies per-resource bearer tokens through a custom AVFoundation resource loader; HLS child URLs are rewritten, HTTPS is required, and tokens are scoped to exact trusted hosts. Generic arbitrary-header configuration remains absent.
 - **Implemented, not iOS-verified** — The demo has a separate Protected Playback menu section, prefilled with a public Mux HLS baseline and its trusted host. A blank token loads ordinary HLS; entering a token exercises the bearer path for a protected URL. This public sample is not an authenticated stream. Runtime `snapshot.failure` is displayed and player controllers shut down when their owning views leave. Playlist/Playback Events remain planned placeholders; a UI navigation assertion was added.
-- **Verified by unit tests** — 79 Swift package tests pass, including per-resource token refresh callbacks, request construction, host scoping, playlist rewriting, insecure-child rejection, and authentication-error propagation.
+- **Verified by unit tests** — 81 Swift package tests pass, including per-resource token refresh callbacks, request construction, host scoping, playlist rewriting, insecure-child rejection, authentication-error propagation, autoplay state, and cookie isolation.
+- **User-verified** — Basic playback works in the demo on an iOS simulator or device. The exact device and OS version were not recorded; protected HLS is still awaiting suitable test materials.
+- **Implemented and unit-tested** — Autoplay now waits for AVFoundation's observed playing/waiting state before reporting the phase. Authenticated requests use only explicitly configured cookies, not shared app cookie storage.
+- **Implemented** — GitHub Actions runs package tests and builds the demo and UI test bundle on the Xcode 27 runner.
 
 ### NEXT:
-- Arrange a controlled HTTPS HLS origin that requires a bearer header, then verify master and child playlists, segments, keys, range requests, CDN redirects, token refresh, and cancellation on iOS. Public HLS samples found so far do not provide reusable bearer-protected media.
+- When protected-stream test materials are available, verify bearer authentication against a controlled HTTPS HLS origin: master and child playlists, segments, keys, ranges, redirects, token refresh, and cancellation on iOS. Public samples do not provide reusable bearer-protected media.
 - Validate failure mappings against representative real AVFoundation failures and refine unmapped cases.
 - Confirm audio-session ownership and interruption-state semantics before Phase 5 implementation.
 - Verify playback, cancellation, backgrounding, and routing on iOS 16+ devices and additional supported OS versions.
@@ -98,6 +101,7 @@ separate integration boundaries for DRM and advertising.
 - Integration documentation and SwiftUI/UIKit examples provided
 - DRM and advertising documentation completed
 - CI pipeline and end-to-end tests established
+- **Partial** — GitHub Actions now runs package tests and compiles the demo and UI test bundle. Hosted execution and end-to-end playback tests remain outstanding.
 - Semantic versioning and release process defined
 - Licensing and distribution review completed
 - Migration and deprecation policy established
@@ -116,9 +120,9 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Latest commit**: 048241d (Add bearer-authenticated HLS playback)
+- **Latest commit**: 8eaedee (Document and demo public HLS baseline)
 - **Current phase**: Phase 1 — Core stabilization and production readiness
-- **Workspace changes since that commit**: the protected-playback demo menu separation, prefilled public HLS baseline with optional bearer flow, updated UI test selector, and corresponding documentation updates; these changes are not committed.
-- **Latest test result**: 79 Swift tests in 10 suites passed on macOS arm64; generic iOS Simulator build-for-testing succeeded for the SDK, demo, and UI test bundle. CoreSimulatorService was unavailable, so simulator/device runtime and OS-version verification has not been performed.
+- **Workspace changes since that commit**: autoplay phase correction, authenticated cookie-session isolation, regression tests, CI workflow, and audit/roadmap updates; these changes are not committed.
+- **Latest test result**: 81 Swift tests in 10 suites passed on macOS arm64; the demo and UI test bundle compiled for generic iOS Simulator. Basic playback was subsequently confirmed by the user on a simulator or device; protected HLS and automated UI runtime tests remain unverified.
 - **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes a 2026-10-16 reassessment. StreamKit is not yet production-ready against Phase 1 criteria.
-- **Next milestone**: Validate bearer-authenticated HLS on iOS against a protected origin (including child resources, CDN redirects, token refresh, and cancellation), then complete remaining Phase 1 device checks.
+- **Next milestone**: Let CI validate package tests and demo compilation, then complete broader lifecycle, interruption, and minimum-supported-iOS checks. Resume protected-HLS verification when a controlled origin and credentials are available.

@@ -1,5 +1,7 @@
 # StreamKit Comprehensive Code Audit Report
 
+> **Historical report — superseded as of 2026-10-16.** The findings and verdict below describe an earlier revision. In particular, AUDIT-001 (stale playback events) was resolved with generation-tagged events and a regression test; the 33-test count and production-readiness assessment are outdated. Use [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) for current findings and verification status.
+
 ## Executive Summary
 
 StreamKit is a Swift Package implementing a native iOS media-player SDK using Swift concurrency. The codebase demonstrates a clean separation of concerns with a well-defined public API and internal playback abstractions. The implementation uses modern Swift concurrency patterns with proper MainActor isolation and Sendable conformance where needed.

@@ -110,6 +110,17 @@ public final class StreamPlayerController {
                 }
 
                 if snapshot.intent == .play {
+                    // The item is ready, but AVPlayer may still be buffering.
+                    // Let the observed time-control status report `.playing`.
+                    updateSnapshot(
+                        PlaybackSnapshot(
+                            phase: .ready,
+                            intent: .play,
+                            currentTime: snapshot.currentTime,
+                            duration: snapshot.duration
+                        )
+                    )
+
                     try await engine.play()
 
                     guard !isShutdown,
@@ -117,15 +128,6 @@ public final class StreamPlayerController {
                     else {
                         throw CancellationError()
                     }
-
-                    updateSnapshot(
-                        PlaybackSnapshot(
-                            phase: .playing,
-                            intent: .play,
-                            currentTime: snapshot.currentTime,
-                            duration: snapshot.duration
-                        )
-                    )
                 } else {
                     updateSnapshot(
                         PlaybackSnapshot(

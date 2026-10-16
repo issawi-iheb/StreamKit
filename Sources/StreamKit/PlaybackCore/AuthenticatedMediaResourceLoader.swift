@@ -34,11 +34,18 @@ final class AuthenticatedMediaResourceLoader: NSObject,
             userAgent: userAgent
         )
         self.session = URLSession(
-            configuration: .default,
+            configuration: Self.makeSessionConfiguration(),
             delegate: sessionDelegate,
             delegateQueue: nil
         )
         super.init()
+    }
+
+    static func makeSessionConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        return configuration
     }
 
     static func assetURL(for sourceURL: URL) throws -> URL {

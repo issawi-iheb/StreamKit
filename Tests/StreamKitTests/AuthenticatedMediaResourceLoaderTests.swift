@@ -4,6 +4,14 @@ import Testing
 
 @Suite("Authenticated HLS resource loading")
 struct AuthenticatedMediaResourceLoaderTests {
+    @Test("Authenticated requests do not use shared cookie storage")
+    func authenticatedSessionDoesNotUseSharedCookies() {
+        let configuration = AuthenticatedMediaResourceLoader.makeSessionConfiguration()
+
+        #expect(configuration.httpCookieStorage == nil)
+        #expect(!configuration.httpShouldSetCookies)
+    }
+
     @Test("Requests fresh tokens for each media resource")
     func requestsTokenForEachResource() async throws {
         let tokenSequence = TokenSequence()

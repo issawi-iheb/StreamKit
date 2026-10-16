@@ -184,6 +184,8 @@ try await handle.waitUntilReady()
 
 The token provider is called for media requests, not just the initial playlist. List every exact host that may serve playlists, segments, keys, or redirects. Tokens are never sent to non-HTTPS or non-allowlisted hosts. Authenticated HLS playlists that reference insecure HTTP resources fail instead of downgrading transport. Regular HTTPS playback without bearer authentication keeps using AVFoundation's native loading path.
 
+Authenticated loading uses an isolated URL session. It does not read cookies from the app's shared URL session store; pass any required cookies explicitly with `MediaRequestConfiguration` so StreamKit can apply their domain and path scope.
+
 Bearer mode uses an AVFoundation resource loader and rewrites HLS resource URLs. Validate it with your CDN, redirects, byte-range behavior, token refresh policy, and supported HLS features before shipping. Cookies and user-agent configuration remain available for services that use those mechanisms instead.
 
 ## Documentation
@@ -213,3 +215,7 @@ See the [StreamKitDemo](Examples/StreamKitDemo/) target for a complete example s
 - Host-scoped bearer authentication for protected HLS streams
 
 The demo's separate **Protected Playback** section is prefilled with a public Mux HLS sample (`https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`) and its trusted host. Leave the token blank to check ordinary HLS playback. To exercise bearer authentication, replace the URL and trusted-host list with a protected stream you control and enter its valid development token. The public sample is not bearer-protected and does not verify authenticated playback.
+
+## Continuous Integration
+
+GitHub Actions runs the Swift package tests and builds the demo plus UI test bundle with the Xcode 27 runner. The hosted Xcode 27 image is currently a public preview. UI tests are compiled in CI; they still require a simulator runtime to execute. The workflow has been added, but its first hosted run is pending.

@@ -90,6 +90,8 @@ public struct MediaCookie: Equatable, Sendable {
 public struct MediaRequestConfiguration: Equatable, Sendable {
 
     /// Cookies scoped by domain and path for media requests.
+    /// Authenticated loading uses only these explicit cookies and does not
+    /// consult the app's shared URLSession cookie storage.
     public let cookies: [MediaCookie]
     /// User-Agent supplied to AVURLAsset for media requests.
     public let userAgent: String?

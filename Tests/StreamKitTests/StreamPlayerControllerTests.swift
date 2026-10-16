@@ -86,6 +86,41 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("Autoplay waits for AVFoundation state before reporting playback")
+    func autoplayWaitsForObservedPlaybackState() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: true),
+            engine: engine
+        )
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .play)
+
+        engine.emit(.waiting, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.waiting, controller: controller)
+
+        #expect(controller.snapshot.phase == .waiting)
+        #expect(controller.snapshot.intent == .play)
+
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: controller)
+
+        #expect(controller.snapshot.phase == .playing)
+        #expect(controller.snapshot.intent == .play)
+
+        await controller.shutdown()
+    }
+
     @Test("Time updates preserve an unknown duration")
     func timeUpdatesPreserveUnknownDuration() async throws {
         let engine = MockPlaybackEngine()

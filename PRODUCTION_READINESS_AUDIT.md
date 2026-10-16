@@ -2,19 +2,11 @@
 
 ## Executive Summary
 
-This report presents the findings of a production-readiness audit of the StreamKit iOS media-player SDK. The audit focused on verifying the core stabilization and production readiness aspects outlined in Phase 1 of the project roadmap.
+This living report tracks StreamKit's production-readiness review against Phase 1 of the roadmap. The original findings below reflect earlier revisions; the later follow-up is authoritative when statuses or verification counts differ.
 
-Overall, StreamKit demonstrates a solid foundation with proper use of Swift concurrency, resource management, and isolation patterns. The codebase follows modern Swift practices with correct `@MainActor` usage, proper task cancellation, and comprehensive error handling. All 61 unit tests pass, indicating good test coverage for the implemented functionality.
+**Current status (2026-10-16):** StreamKit has a sound playback foundation and 81 passing Swift tests across 10 suites. The user confirmed basic demo playback on an iOS simulator or device. The package is **not yet production-ready**: protected HLS has not been exercised against a controlled origin on iOS, broader lifecycle and interruption behavior need verification, and the new CI workflow has not yet had its first hosted run.
 
-However, several areas for improvement were identified, primarily related to:
-- Edge cases in shutdown sequence and state transitions
-- Potential improvements in observer cleanup
-- Documentation accuracy regarding certain behaviors
-- Additional test coverage for concurrency and cancellation scenarios
-
-No critical defects were found that would prevent production use, but addressing the identified issues would enhance robustness and reliability.
-
-## Audit Scope and Limitations
+## Original Audit Scope and Limitations (Historical Snapshot)
 
 ### Scope
 The audit covered the StreamKit SDK source code located in `/StreamKit/Sources/StreamKit/` including:
@@ -30,7 +22,7 @@ The audit covered the StreamKit SDK source code located in `/StreamKit/Sources/S
 - The audit focused on the source code and documentation as of commit 4451e78
 - While Swift concurrency correctness was analyzed, formal verification of absence of data races was not performed
 
-## Commands Run and Actual Results
+## Original Commands and Results (Historical Snapshot)
 
 1. **Test Suite Execution**
    - Command: `cd /Users/iheb/Documents/StreamKit && swift test`
@@ -393,24 +385,31 @@ This follow-up supersedes the corresponding open items above where code or verif
 
 - `MediaRequestConfiguration` offers scoped cookies, a user-agent, and host-scoped bearer authentication. Bearer mode routes HTTPS resources through an `AVAssetResourceLoader`, adds an `Authorization: Bearer` header per request, and rewrites HLS child-resource references. Exact host allowlisting and HTTPS-only transport limit credential exposure. Cookie domain/path scoping must match the media and its HLS child requests.
 - The authenticated playback demo is separated in its own Protected Playback menu section. It is prefilled with Mux's public HLS test stream and trusted host; a blank token loads it as ordinary HLS, while a supplied token enables the authenticated request path for a protected URL. The example contains no real credential. The public Mux stream is only a basic playback baseline and does not validate bearer authentication.
+- Basic playback in the demo has now been verified by the user on an iOS simulator or device. The exact device, OS version, and stream-run details were not recorded; this confirms the sample's basic playback path but not protected HLS.
+- Autoplay no longer reports `.playing` immediately after issuing `AVPlayer.play()`. It reports `.ready` with play intent until AVFoundation emits its observed playback state.
+- The authenticated URLSession is ephemeral and disables automatic cookie storage and cookie sending. Only explicit `MediaCookie` values are applied, keeping app-wide cookies out of authenticated media requests.
 - Added tests cover token/header creation per resource, host scoping, cookie/user-agent/range request fields, HLS child URL rewriting, HTTPS URL mapping, and rejection of insecure HTTP children.
 - Added a UI test that opens the bearer-auth demo and checks its URL, trusted-host, token, and load controls.
+- Added regression tests for autoplay state reporting and authenticated-session cookie isolation.
+- Added GitHub Actions CI to run `swift test` and compile the demo and UI test bundle using the Xcode 27 runner.
 - Added `PlaybackFailureMapping` for `NSURLErrorDomain`, common AVFoundation parse/format errors, and wrapped underlying errors. Messages are stable and do not expose raw URLs or request details. Other AVFoundation failures remain `.playback`.
 - The demo player now renders `snapshot.failure`. Standalone and concurrent demo screens shut their controllers down when their owning SwiftUI task is cancelled; the full-screen player presentation shares the owner task and controller.
 - Placeholder destinations are labeled as planned, not implemented.
 
 ### Verification
 
-- `swift test`: **79 tests passed in 10 suites** on macOS arm64 (Xcode 27.0 toolchain).
+- Before the two latest regression tests, `swift test` passed **79 tests in 10 suites** on macOS arm64 (Xcode 27.0 toolchain).
+- After the state and cookie-isolation fixes, `swift test` passes **81 tests in 10 suites**.
 - `git diff --check`: clean.
-- `xcodebuild build-for-testing` succeeded for the generic iOS Simulator destination, compiling the SDK, demo, and UI test bundle. Simulator test execution/runtime checks could not run because CoreSimulatorService was unavailable and no simulator runtime could be enumerated. No physical iOS device verification was possible.
-- The updated sample menu and flow also compiled with `xcodebuild build-for-testing`; its bearer-auth UI test compiled but could not run without CoreSimulator. The public Mux stream has not been treated as an authenticated-origin test.
+- `xcodebuild build-for-testing` succeeded for the generic iOS Simulator destination, compiling the SDK, demo, and UI test bundle. Simulator test execution/runtime checks could not run in this audit environment because CoreSimulatorService was unavailable and no simulator runtime could be enumerated. The user later confirmed basic demo playback on a simulator or device; protected playback remains unverified.
+- The updated sample menu and flow compiled with `xcodebuild build-for-testing`; its bearer-auth UI test compiled but could not run without CoreSimulator in this environment. The public Mux stream has not been treated as an authenticated-origin test.
 
 ### Remaining blockers to Phase 1 completion
 
-- Bearer resource loading and playlist rewriting have unit coverage but have not been exercised against a live protected HLS origin on iOS. No reusable public HLS endpoint with bearer-protected playlists and segments was identified; the public sample only checks basic playback. Use a controlled protected origin to validate segment/key requests, range behavior, CDN redirects, token expiry/refresh, and AVFoundation cancellation on simulator/device before advertising support broadly.
-- Audio-session interruption/background behavior, real media/network playback, and minimum-supported iOS behavior still need simulator/device validation.
-- Demo UI behavior and teardown compile for the generic iOS Simulator target but have not been exercised at runtime because simulator services are unavailable.
+- Bearer resource loading and playlist rewriting have unit coverage but have not been exercised against a live protected HLS origin on iOS. No reusable public HLS endpoint with bearer-protected playlists and segments was identified; the public sample only checks basic playback. Use a controlled protected origin to validate segments/keys, ranges, redirects, token expiry/refresh, and AVFoundation cancellation on simulator/device before advertising support broadly.
+- Audio-session interruption/background behavior, lifecycle profiling, and minimum-supported iOS behavior still need broader simulator/device validation.
+- The user confirmed basic sample playback on a simulator or device; UI automation and teardown behavior still need CI/device execution.
+- The GitHub Actions workflow is in place, but its first hosted run remains pending. It uses GitHub's Xcode 27 runner label.
 - The 32× rate ceiling remains an SDK policy pending product confirmation.
 
-**Readiness remains: not production-ready.** Keep work in Phase 1; validate the authenticated resource loader against real protected HLS origins and iOS runtime behavior before Phase 2.
+**Readiness remains: not production-ready.** Basic demo playback has been user-verified. Keep work in Phase 1; validate the authenticated resource loader against a controlled protected HLS origin and complete broader iOS runtime checks before Phase 2.
