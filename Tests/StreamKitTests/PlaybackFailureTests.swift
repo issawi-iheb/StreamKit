@@ -6,6 +6,8 @@
 //
 
 import Testing
+import AVFoundation
+import Foundation
 @testable import StreamKit
 
 @Suite("PlaybackFailure")
@@ -65,5 +67,49 @@ struct PlaybackFailureTests {
         )
 
         #expect(first != second)
+    }
+
+    @Test("Maps URL loading errors as network failures")
+    func mapsURLLoadingError() {
+        let failure = PlaybackFailureMapping.map(URLError(.timedOut))
+        #expect(failure.code == .network)
+        #expect(!failure.message.contains("https://"))
+    }
+
+    @Test("Maps unsupported AVFoundation formats")
+    func mapsUnsupportedFormat() {
+        let error = NSError(
+            domain: AVFoundationErrorDomain,
+            code: AVError.Code.formatUnsupported.rawValue
+        )
+        #expect(PlaybackFailureMapping.map(error).code == .unsupportedFormat)
+    }
+
+    @Test("Finds network errors wrapped by AVFoundation")
+    func mapsWrappedNetworkError() {
+        let underlying = NSError(domain: NSURLErrorDomain, code: URLError.timedOut.rawValue)
+        let wrapped = NSError(
+            domain: AVFoundationErrorDomain,
+            code: -11800,
+            userInfo: [NSUnderlyingErrorKey: underlying]
+        )
+        #expect(PlaybackFailureMapping.map(wrapped).code == .network)
+    }
+
+    @Test("Preserves authentication failures wrapped by AVFoundation")
+    func mapsWrappedAuthenticationError() {
+        let authentication = PlaybackFailureMapping.authenticationNSError(
+            message: "A private credential message."
+        )
+        let wrapped = NSError(
+            domain: AVFoundationErrorDomain,
+            code: -11800,
+            userInfo: [NSUnderlyingErrorKey: authentication]
+        )
+
+        let failure = PlaybackFailureMapping.map(wrapped)
+        #expect(failure.code == .authentication)
+        #expect(failure.message == "The media server rejected the supplied credentials.")
+        #expect(!failure.message.contains("private credential"))
     }
 }

@@ -33,11 +33,21 @@ struct DemoHomeView: View {
                     }
 
                     NavigationLink {
+                        BearerAuthenticatedPlayerDemoView()
+                    } label: {
+                        DemoNavigationRow(
+                            title: "Bearer Authentication",
+                            subtitle: "Protected HLS with host-scoped tokens",
+                            symbol: "lock.shield"
+                        )
+                    }
+
+                    NavigationLink {
                         PlaylistDemoView()
                     } label: {
                         DemoNavigationRow(
                             title: "Playlist",
-                            subtitle: "Select and play different media sources",
+                            subtitle: "Planned demo — not implemented yet.",
                             symbol: "list.bullet.rectangle"
                         )
                     }
@@ -49,7 +59,7 @@ struct DemoHomeView: View {
                     } label: {
                         DemoNavigationRow(
                             title: "Playback Events",
-                            subtitle: "Observe playback state and failures",
+                            subtitle: "Planned demo — not implemented yet.",
                             symbol: "waveform.path"
                         )
                     }

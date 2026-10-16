@@ -90,6 +90,22 @@ struct ConcurrentPlayersDemoView: View {
                 secondSnapshot = snapshot
             }
         }
+        .task {
+            await withTaskCancellationHandler {
+                while !Task.isCancelled {
+                    do {
+                        try await Task.sleep(for: .seconds(3_600))
+                    } catch {
+                        break
+                    }
+                }
+            } onCancel: {
+                Task { @MainActor in
+                    await firstController.shutdown()
+                    await secondController.shutdown()
+                }
+            }
+        }
         .fullScreenCover(isPresented: $isFirstPlayerFullscreen) {
             DemoPlayerView(
                 controller: firstController,

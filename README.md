@@ -161,6 +161,31 @@ Each `load(_:)` call returns a `LoadHandle`:
 - Safe to call multiple times
 - After shutdown, all methods will fail or return immediately
 
+## Bearer-Authenticated HLS
+
+Use `MediaBearerAuthentication` when the media server requires an `Authorization: Bearer` token. Supply exact HTTPS host names that are allowed to receive credentials. StreamKit invokes the async token provider for the master playlist and each rewritten HLS resource, so the application can refresh credentials as needed.
+
+```swift
+let authentication = MediaBearerAuthentication(
+    trustedHosts: ["video.example.com", "cdn.example.com"]
+) { resourceURL in
+    try await accountSession.validMediaToken(for: resourceURL)
+}
+
+let source = MediaSource(
+    url: URL(string: "https://video.example.com/master.m3u8")!,
+    requestConfiguration: MediaRequestConfiguration(
+        bearerAuthentication: authentication
+    )
+)
+let handle = controller.load(source)
+try await handle.waitUntilReady()
+```
+
+The token provider is called for media requests, not just the initial playlist. List every exact host that may serve playlists, segments, keys, or redirects. Tokens are never sent to non-HTTPS or non-allowlisted hosts. Authenticated HLS playlists that reference insecure HTTP resources fail instead of downgrading transport. Regular HTTPS playback without bearer authentication keeps using AVFoundation's native loading path.
+
+Bearer mode uses an AVFoundation resource loader and rewrites HLS resource URLs. Validate it with your CDN, redirects, byte-range behavior, token refresh policy, and supported HLS features before shipping. Cookies and user-agent configuration remain available for services that use those mechanisms instead.
+
 ## Documentation
 
 - [Architecture Overview](Documentation/Architecture.md) - Core design principles
@@ -185,3 +210,4 @@ See the [StreamKitDemo](Examples/StreamKitDemo/) target for a complete example s
 - Track selection UI
 - Concurrent independent players
 - Error handling scenarios
+- Host-scoped bearer authentication for protected HLS streams

@@ -27,30 +27,31 @@ separate integration boundaries for DRM and advertising.
 - Audio and subtitle selection.
 - Playback-speed support and validation.
 - Snapshot broadcasting.
-- SwiftUI demo player with native audio, subtitle and speed menus.
+- **Partial** — SwiftUI standalone and concurrent-player demos with native audio, subtitle, seeking and speed controls; Playlist and Playback Events remain labeled placeholders.
 - Automated unit tests for implemented behavior.
 
-### ACCEPTANCE CRITERIA (NOT YET MET):
-- Lifecycle audit: shutdown safety, resource cleanup, no leaks
-- Cancellation audit: operations cancel cleanly, no stale continuations
-- Concurrency audit: Swift concurrency correctness, actor isolation
-- Playback state transitions: intent/phase coordination, buffering behavior
-- Error handling: proper error propagation and recovery
-- Multiple simultaneous players: isolated instances, no interference
-- Platform compatibility: iOS 16+ behavior verified
-- Regression tests: existing functionality preserved
-- Full test suite: all tests pass
+### ACCEPTANCE CRITERIA STATUS:
+- **In progress** — Lifecycle audit: shutdown paths and observer cleanup reviewed; device leak profiling remains outstanding.
+- **In progress** — Cancellation audit: stale and overlapping loads covered by unit tests; cancellation during live AVFoundation operations needs platform verification.
+- **Verified by code review** — Concurrency and actor isolation; this is not a formal data-race proof.
+- **Verified by unit tests** — Intent/phase coordination, buffering transitions, and stale event handling.
+- **Implemented, unit tested** — AVFoundation network errors, common parse/format failures, and wrapped underlying URL errors map to stable `.network`, `.unsupportedFormat`, and `.playback` categories. Other AVFoundation errors remain coarse.
+- **Verified by unit tests** — Multiple controller/engine isolation.
+- **Not verified** — iOS 16+ behavior across supported OS versions and physical devices.
+- **In progress** — Regression coverage includes unknown-duration updates, repeated overlapping loads, explicit cancellation, and pending-item cleanup; real live AVFoundation behavior remains unverified.
+- **Assessed, not implemented** — No audio-session interruption or app-background handling exists in the SDK or demo. The controller now reports `.paused` while preserving `.play` intent when the engine pauses. The host app should configure process-wide `AVAudioSession`; resume policy and background behavior need definition before Phase 5.
+- **Implemented, pending live iOS validation** — `MediaBearerAuthentication` supplies per-resource bearer tokens through a custom AVFoundation resource loader; HLS child URLs are rewritten, HTTPS is required, and tokens are scoped to exact trusted hosts. Generic arbitrary-header configuration remains absent.
+- **Implemented, not iOS-verified** — The demo includes protected HLS URL/token/host inputs, displays runtime `snapshot.failure`, and shuts down player controllers when their owning views leave. Playlist/Playback Events remain planned placeholders; a UI navigation assertion was added.
+- **Verified by unit tests** — 79 Swift package tests pass, including per-resource token refresh callbacks, request construction, host scoping, playlist rewriting, insecure-child rejection, and authentication-error propagation.
 
 ### NEXT:
-- Audit lifecycle, cancellation and shutdown.
-- Audit Swift concurrency and actor isolation.
-- Audit playback state transitions and error propagation.
-- Verify seeking, buffering, ended state and live streams.
-- Assess audio interruptions and recovery.
-- Test multiple simultaneous players.
-- Identify missing regression tests.
-- Fix confirmed issues and rerun the full test suite.
-- Verify supported platform and OS-version behavior.
+- Verify bearer authentication against live protected HLS on iOS: master and child playlists, segments, keys, range requests, CDN redirects, token refresh, and cancellation.
+- Validate failure mappings against representative real AVFoundation failures and refine unmapped cases.
+- Confirm audio-session ownership and interruption-state semantics before Phase 5 implementation.
+- Verify playback, cancellation, backgrounding, and routing on iOS 16+ devices and additional supported OS versions.
+- Profile lifecycle cleanup and playback behavior with real HLS and progressive media.
+- Launch the demo on an iOS simulator and run the new bearer-auth screen when simulator services are available; generic iOS Simulator build succeeds.
+- Confirm the 32× playback-rate policy against product requirements before release.
 
 ## PHASE 2 — FairPlay DRM
 
@@ -117,4 +118,7 @@ separate integration boundaries for DRM and advertising.
 
 - **Latest commit**: 29d9411 (Add playback rate support and improve demo player controls)
 - **Current phase**: Phase 1 — Core stabilization and production readiness
-- **Next milestone**: Complete the audit items listed under Phase 1 "NEXT" and rerun the full test suite.
+- **Workspace changes since that commit**: shutdown observer cleanup, playback-rate upper bound, documentation corrections, and added regression tests; these changes are not committed.
+- **Latest test result**: 79 Swift tests in 10 suites passed on macOS arm64; generic iOS Simulator build-for-testing succeeded for the SDK, demo, and UI test bundle. CoreSimulatorService was unavailable, so simulator/device runtime and OS-version verification has not been performed.
+- **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes a 2026-10-16 reassessment. StreamKit is not yet production-ready against Phase 1 criteria.
+- **Next milestone**: Validate bearer-authenticated HLS on iOS against a protected origin (including child resources, CDN redirects, token refresh, and cancellation), then complete remaining Phase 1 device checks.

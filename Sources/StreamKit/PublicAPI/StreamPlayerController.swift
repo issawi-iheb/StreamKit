@@ -12,6 +12,8 @@ import AVFoundation
 @MainActor
 public final class StreamPlayerController {
 
+    private static let maximumPlaybackRate: Float = 32.0
+
     // MARK: - Public API
 
     /// The configuration used to create this player.
@@ -149,11 +151,7 @@ public final class StreamPlayerController {
                         )
                     )
                 } else {
-                    let failure = error as? PlaybackFailure
-                        ?? PlaybackFailure(
-                            code: .playback,
-                            message: error.localizedDescription
-                        )
+                    let failure = PlaybackFailureMapping.map(error)
 
                     updateSnapshot(
                         PlaybackSnapshot(
@@ -243,11 +241,7 @@ public final class StreamPlayerController {
                 throw error
             }
 
-            let failure = error as? PlaybackFailure
-                ?? PlaybackFailure(
-                    code: .playback,
-                    message: error.localizedDescription
-                )
+            let failure = PlaybackFailureMapping.map(error)
 
             updateSnapshot(
                 PlaybackSnapshot(
@@ -296,7 +290,7 @@ public final class StreamPlayerController {
 
     /// Sets the playback rate for this player.
     ///
-    /// The rate must be finite and greater than zero. The selected rate
+    /// The rate must be finite and between 0 and 32. The selected rate
     /// is retained when a new source is loaded.
     ///
     /// Changing the rate does not start playback or change playback intent.
@@ -305,10 +299,10 @@ public final class StreamPlayerController {
             throw shutdownFailure()
         }
 
-        guard rate.isFinite, rate > 0 else {
+        guard rate.isFinite, rate > 0, rate <= Self.maximumPlaybackRate else {
             throw PlaybackFailure(
                 code: .invalidPlaybackRate,
-                message: "The playback rate must be finite and greater than zero."
+                message: "The playback rate must be finite and greater than zero, and no greater than 32."
             )
         }
 
@@ -423,12 +417,8 @@ public final class StreamPlayerController {
                     failure: failure
                 )
             )
-            case .paused:
-                guard snapshot.intent == .pause else {
-                    return
-                }
-
-                updatePhase(.paused)
+        case .paused:
+            updatePhase(.paused)
         }
     }
 

@@ -34,6 +34,19 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testBearerAuthenticationExampleShowsCredentialInputs() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["Bearer Authentication"].tap()
+
+        XCTAssertTrue(app.textFields["HTTPS media URL"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.textFields["Trusted media hosts"].exists)
+        XCTAssertTrue(app.secureTextFields["Bearer token"].exists)
+        XCTAssertTrue(app.buttons["Load protected stream"].exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

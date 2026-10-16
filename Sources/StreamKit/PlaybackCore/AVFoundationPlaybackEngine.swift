@@ -36,6 +36,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
     // Current item identity and generation.
     private var observedItem: AVPlayerItem?
+    private var authenticatedResourceLoader: AuthenticatedMediaResourceLoader?
     private var loadGeneration: UInt64 = 0
     private var activeSourceGeneration: UInt64 = 0
 
@@ -76,16 +77,83 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
         // Invalidate the previous generation before cancelling its load.
         removePlaybackObservers()
+        authenticatedResourceLoader?.cancelAll()
+        authenticatedResourceLoader = nil
         loadGeneration = engineGeneration
         cancelPendingReadiness()
+        player.pause()
+        player.replaceCurrentItem(with: nil)
 
-        let asset = AVURLAsset(url: source.url)
+        var assetOptions: [String: Any] = [:]
+        let request = source.requestConfiguration
+        if let userAgent = request.userAgent, !userAgent.isEmpty {
+            if #available(iOS 16.0, macOS 13.0, tvOS 16.0, *) {
+                assetOptions[AVURLAssetHTTPUserAgentKey] = userAgent
+            } else {
+                throw PlaybackFailure(
+                    code: .unsupportedConfiguration,
+                    message: "A custom User-Agent requires a newer operating system."
+                )
+            }
+        }
+        if !request.cookies.isEmpty {
+            let cookies = request.cookies.compactMap { value in
+                HTTPCookie(properties: [
+                    .name: value.name,
+                    .value: value.value,
+                    .domain: value.domain,
+                    .path: value.path,
+                    .secure: value.isSecure ? "TRUE" : "FALSE"
+                ])
+            }
+            guard cookies.count == request.cookies.count else {
+                throw PlaybackFailure(
+                    code: .unsupportedConfiguration,
+                    message: "One or more media cookies are invalid."
+                )
+            }
+            assetOptions[AVURLAssetHTTPCookiesKey] = cookies
+        }
+
+        let assetURL: URL
+        if let authentication = request.bearerAuthentication {
+            guard authentication.trusts(source.url) else {
+                throw PlaybackFailure(
+                    code: .unsupportedConfiguration,
+                    message: "Bearer authentication must trust the media URL host."
+                )
+            }
+            assetURL = try AuthenticatedMediaResourceLoader.assetURL(for: source.url)
+            let resourceLoader = AuthenticatedMediaResourceLoader(
+                authentication: authentication,
+                cookies: request.cookies,
+                userAgent: request.userAgent
+            )
+            authenticatedResourceLoader = resourceLoader
+            let asset = AVURLAsset(url: assetURL, options: assetOptions)
+            asset.resourceLoader.setDelegate(resourceLoader, queue: resourceLoader.delegateQueue)
+            let item = AVPlayerItem(asset: asset)
+            observedItem = item
+            player.replaceCurrentItem(with: item)
+
+            installPlaybackObservers(for: item, generation: engineGeneration)
+            try await waitForReadiness(of: item, generation: engineGeneration)
+            return
+        } else {
+            assetURL = source.url
+        }
+
+        let asset = AVURLAsset(url: assetURL, options: assetOptions)
         let item = AVPlayerItem(asset: asset)
 
         observedItem = item
         player.replaceCurrentItem(with: item)
 
         installPlaybackObservers(for: item, generation: engineGeneration)
+        try await waitForReadiness(of: item, generation: engineGeneration)
+    }
+
+    private func waitForReadiness(of item: AVPlayerItem, generation engineGeneration: UInt64) async throws {
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<Void, Error>) in
@@ -127,9 +195,22 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             }
         } onCancel: {
             Task { @MainActor [weak self] in
-                self?.cancelPendingReadiness(for: engineGeneration)
+                self?.cancelLoad(for: engineGeneration)
             }
         }
+    }
+
+    private func cancelLoad(for generation: UInt64) {
+        guard !isShutdown, loadGeneration == generation else {
+            return
+        }
+
+        cancelPendingReadiness(for: generation)
+        removePlaybackObservers()
+        authenticatedResourceLoader?.cancelAll()
+        authenticatedResourceLoader = nil
+        player.pause()
+        player.replaceCurrentItem(with: nil)
     }
 
     private func handleItemStatus(
@@ -158,11 +239,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             )
 
         case .failed:
-            let failure = PlaybackFailure(
-                code: .playback,
-                message: item.error?.localizedDescription
-                    ?? "The media item failed to load."
-            )
+            let failure = PlaybackFailureMapping.map(item.error)
 
             completeReadiness(
                 with: failure,
@@ -389,10 +466,10 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         _ error: Error?,
         fallbackMessage: String
     ) {
-        let failure = PlaybackFailure(
-            code: .playback,
-            message: error?.localizedDescription ?? fallbackMessage
-        )
+        let mappedFailure = PlaybackFailureMapping.map(error)
+        let failure = error == nil
+            ? PlaybackFailure(code: .playback, message: fallbackMessage)
+            : mappedFailure
 
         emit(.failed(failure))
     }
@@ -590,10 +667,10 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             throw shutdownFailure()
         }
 
-        guard rate.isFinite, rate > 0 else {
+        guard rate.isFinite, rate > 0, rate <= 32 else {
             throw PlaybackFailure(
                 code: .invalidPlaybackRate,
-                message: "The playback rate must be finite and greater than zero."
+                message: "The playback rate must be finite and greater than zero, and no greater than 32."
             )
         }
 
@@ -661,7 +738,13 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         loadGeneration &+= 1
 
         cancelPendingReadiness()
+        // Keep shutdown cleanup complete even if readiness state and the
+        // observation ever become temporarily out of sync.
+        itemStatusObservation?.invalidate()
+        itemStatusObservation = nil
         removePlaybackObservers()
+        authenticatedResourceLoader?.cancelAll()
+        authenticatedResourceLoader = nil
 
         player.pause()
         player.replaceCurrentItem(with: nil)

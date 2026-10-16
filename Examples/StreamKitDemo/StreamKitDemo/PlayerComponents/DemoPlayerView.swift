@@ -131,6 +131,21 @@ struct DemoPlayerView: View {
                         .accessibilityLabel("Buffering")
                 }
 
+                if snapshot.phase == .failed, let failure = snapshot.failure {
+                    VStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.title2)
+                        Text(failure.message)
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(16)
+                    .foregroundStyle(.white)
+                    .background(.black.opacity(0.76), in: RoundedRectangle(cornerRadius: 12))
+                    .padding(24)
+                    .accessibilityElement(children: .contain)
+                }
+
                 if controlsVisible {
                     LinearGradient(
                         stops: [

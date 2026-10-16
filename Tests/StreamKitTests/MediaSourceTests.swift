@@ -29,31 +29,34 @@ struct MediaSourceTests {
             url: URL(string: "https://example.com/video.m3u8")!
         )
 
-        #expect(source.requestConfiguration.httpHeaders.isEmpty)
+        #expect(source.requestConfiguration.cookies.isEmpty)
+        #expect(source.requestConfiguration.userAgent == nil)
     }
 
-    @Test("Preserves HTTP headers")
-    func preservesHTTPHeaders() {
-        let headers = [
-            "Authorization": "Bearer test-token",
-            "X-Client-ID": "test-client"
-        ]
-
+    @Test("Preserves cookies and user agent")
+    func preservesCookiesAndUserAgent() {
+        let cookie = MediaCookie(
+            name: "session",
+            value: "secret",
+            domain: "media.example.com"
+        )
         let source = MediaSource(
-            url: URL(string: "https://example.com/video.m3u8")!,
+            url: URL(string: "https://media.example.com/video.m3u8")!,
             requestConfiguration: MediaRequestConfiguration(
-                httpHeaders: headers
+                cookies: [cookie],
+                userAgent: "StreamKitDemo/1.0"
             )
         )
 
-        #expect(source.requestConfiguration.httpHeaders == headers)
+        #expect(source.requestConfiguration.cookies == [cookie])
+        #expect(source.requestConfiguration.userAgent == "StreamKitDemo/1.0")
     }
 
     @Test("Identical sources are equal")
     func identicalSourcesAreEqual() {
         let url = URL(string: "https://example.com/video.m3u8")!
         let configuration = MediaRequestConfiguration(
-            httpHeaders: ["Authorization": "Bearer test-token"]
+            cookies: [MediaCookie(name: "session", value: "token", domain: "example.com")]
         )
 
         let first = MediaSource(
@@ -69,24 +72,39 @@ struct MediaSourceTests {
         #expect(first == second)
     }
 
-    @Test("Sources with different headers are unequal")
-    func differentHeadersProduceUnequalSources() {
+    @Test("Sources with different cookies are unequal")
+    func differentCookiesProduceUnequalSources() {
         let url = URL(string: "https://example.com/video.m3u8")!
 
         let first = MediaSource(
             url: url,
             requestConfiguration: MediaRequestConfiguration(
-                httpHeaders: ["Authorization": "Bearer token-a"]
+                cookies: [MediaCookie(name: "session", value: "a", domain: "example.com")]
             )
         )
 
         let second = MediaSource(
             url: url,
             requestConfiguration: MediaRequestConfiguration(
-                httpHeaders: ["Authorization": "Bearer token-b"]
+                cookies: [MediaCookie(name: "session", value: "b", domain: "example.com")]
             )
         )
 
         #expect(first != second)
+    }
+
+    @Test("Bearer tokens are requested only for explicitly trusted HTTPS hosts")
+    func bearerAuthenticationIsHostScoped() async throws {
+        let authentication = MediaBearerAuthentication(trustedHosts: ["MEDIA.example.com"]) { url in
+            "token-for-\(url.path)"
+        }
+
+        let trustedURL = URL(string: "https://media.example.com/master.m3u8")!
+        let untrustedURL = URL(string: "https://other.example.com/master.m3u8")!
+        let insecureURL = URL(string: "http://media.example.com/master.m3u8")!
+
+        #expect(try await authentication.authorizationHeader(for: trustedURL) == "Bearer token-for-/master.m3u8")
+        #expect(try await authentication.authorizationHeader(for: untrustedURL) == nil)
+        #expect(try await authentication.authorizationHeader(for: insecureURL) == nil)
     }
 }

@@ -74,10 +74,20 @@ final class MockPlaybackEngine: PlaybackEngine {
             waiter.resume()
         }
 
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
 
-            pendingLoads[loadID] = continuation
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    pendingLoads[loadID] = continuation
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelLoad(id: loadID)
+            }
         }
     }
 
@@ -107,6 +117,14 @@ final class MockPlaybackEngine: PlaybackEngine {
         }
 
         continuation.resume(throwing: error)
+    }
+
+    private func cancelLoad(id: Int) {
+        guard let continuation = pendingLoads.removeValue(forKey: id) else {
+            return
+        }
+
+        continuation.resume(throwing: CancellationError())
     }
 
     func waitForSeek(id: Int) async {

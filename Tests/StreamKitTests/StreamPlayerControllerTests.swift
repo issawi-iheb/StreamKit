@@ -86,6 +86,117 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("Time updates preserve an unknown duration")
+    func timeUpdatesPreserveUnknownDuration() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let source = MediaSource(
+            url: URL(string: "https://example.com/live.m3u8")!
+        )
+
+        let handle = controller.load(source)
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        engine.emit(
+            .timeUpdated(currentTime: 37, duration: nil),
+            fromLoad: 1
+        )
+        engine.deliverQueuedEvents()
+
+        await waitForCurrentTime(37, controller: controller)
+
+        #expect(controller.snapshot.currentTime == 37)
+        #expect(controller.snapshot.duration == nil)
+
+        await controller.shutdown()
+    }
+
+    @Test("Only the newest of several overlapping loads becomes ready")
+    func severalOverlappingLoadsOnlyNewestBecomesReady() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let source = { (index: Int) in
+            MediaSource(
+                url: URL(string: "https://example.com/\(index).m3u8")!
+            )
+        }
+
+        let handles = (1...5).map { index in
+            controller.load(source(index))
+        }
+
+        for loadID in 1...5 {
+            await engine.waitForLoad(id: loadID)
+        }
+
+        for loadID in 1...4 {
+            engine.completeLoad(id: loadID)
+            do {
+                try await handles[loadID - 1].waitUntilReady()
+                Issue.record("Superseded load \(loadID) unexpectedly succeeded.")
+            } catch is CancellationError {
+                // Expected: each subsequent load supersedes the prior one.
+            }
+        }
+
+        #expect(controller.snapshot.phase == .loading)
+
+        engine.completeLoad(id: 5)
+        try await handles[4].waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.currentTime == 0)
+
+        await controller.shutdown()
+    }
+
+    @Test("Repeatedly cancelled loads do not block a later load")
+    func repeatedlyCancelledLoadsAllowRecovery() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        for loadID in 1...5 {
+            let handle = controller.load(
+                MediaSource(
+                    url: URL(string: "https://example.com/cancel-\(loadID).m3u8")!
+                )
+            )
+            await engine.waitForLoad(id: loadID)
+
+            handle.cancel()
+
+            do {
+                try await handle.waitUntilReady()
+                Issue.record("Cancelled load \(loadID) unexpectedly succeeded.")
+            } catch is CancellationError {
+                // Expected: cancellation resumes the pending load operation.
+            }
+        }
+
+        let finalHandle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/recovered.m3u8")!)
+        )
+        await engine.waitForLoad(id: 6)
+        engine.completeLoad(id: 6)
+        try await finalHandle.waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.failure == nil)
+
+        await controller.shutdown()
+    }
+
     @Test("A stale load completion must not override a newer load")
     func staleLoadCompletionDoesNotOverrideNewerLoad() async throws {
         let engine = MockPlaybackEngine()
@@ -319,8 +430,8 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
-    @Test("A paused event does not override play intent")
-    func pausedEventDoesNotOverridePlayIntent() async throws {
+    @Test("A paused event updates phase while preserving play intent")
+    func pausedEventUpdatesPhaseWithoutChangingPlayIntent() async throws {
         let engine = MockPlaybackEngine()
         let controller = StreamPlayerController(
             configuration: PlayerConfiguration(autoplay: false),
@@ -346,10 +457,12 @@ struct StreamPlayerControllerTests {
         engine.emit(.paused, fromLoad: 1)
         engine.deliverQueuedEvents()
 
-        // Allow the controller's event task to process the event.
-        await Task.yield()
+        // Allow the controller's event task to process the queued events.
+        for _ in 0..<10 where controller.snapshot.phase != .paused {
+            await Task.yield()
+        }
 
-        #expect(controller.snapshot.phase == .playing)
+        #expect(controller.snapshot.phase == .paused)
         #expect(controller.snapshot.intent == .play)
 
         await controller.shutdown()
@@ -753,7 +866,9 @@ struct StreamPlayerControllerTests {
             -1,
             .nan,
             .infinity,
-            -.infinity
+            -.infinity,
+            32.01,
+            .greatestFiniteMagnitude
         ]
 
         for rate in invalidRates {
@@ -890,6 +1005,24 @@ struct StreamPlayerControllerTests {
             }
 
             if snapshot.phase == expectedPhase {
+                return
+            }
+        }
+    }
+
+    private func waitForCurrentTime(
+        _ expectedTime: TimeInterval,
+        controller: StreamPlayerController
+    ) async {
+        var snapshots = controller.snapshots.makeAsyncIterator()
+
+        while controller.snapshot.currentTime != expectedTime {
+            guard let snapshot = await snapshots.next() else {
+                Issue.record("Snapshot stream ended before time \(expectedTime)")
+                return
+            }
+
+            if snapshot.currentTime == expectedTime {
                 return
             }
         }

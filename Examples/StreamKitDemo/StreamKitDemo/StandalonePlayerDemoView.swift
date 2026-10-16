@@ -103,5 +103,20 @@ struct StandalonePlayerDemoView: View {
                 snapshot = newSnapshot
             }
         }
+        .task {
+            await withTaskCancellationHandler {
+                while !Task.isCancelled {
+                    do {
+                        try await Task.sleep(for: .seconds(3_600))
+                    } catch {
+                        break
+                    }
+                }
+            } onCancel: {
+                Task { @MainActor in
+                    await controller.shutdown()
+                }
+            }
+        }
     }
 }

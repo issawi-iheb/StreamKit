@@ -11,7 +11,7 @@ struct PlaylistDemoView: View {
     var body: some View {
         DemoPlaceholderView(
             title: "Playlist",
-            description: "Select a media source and load it into the player."
+            description: "Playlist selection is planned but is not implemented yet."
         )
     }
 }
@@ -20,7 +20,7 @@ struct PlaybackEventsDemoView: View {
     var body: some View {
         DemoPlaceholderView(
             title: "Playback Events",
-            description: "Inspect playback state transitions and failures."
+            description: "Playback event inspection is planned but is not implemented yet."
         )
     }
 }

@@ -10,8 +10,8 @@
 /// - ready: The media item is loaded and ready to play, but playback has
 ///   not started.
 /// - playing: The media item is currently playing.
-/// - paused: Playback has been explicitly paused by the user or
-///   application. The media item remains loaded and ready to resume.
+/// - paused: The player is not currently playing and the media item remains
+///   loaded. Intent separately records whether playback was requested.
 /// - waiting: Playback cannot currently progress and is waiting for a condition
 ///   that allows it to continue, such as additional media data. Unlike `paused`,
 ///   this state is not due to an explicit pause request.

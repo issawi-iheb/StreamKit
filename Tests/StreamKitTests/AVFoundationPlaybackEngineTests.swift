@@ -65,6 +65,34 @@ struct AVFoundationPlaybackEngineTests {
         #expect(event == nil)
     }
 
+    @Test("Cancelling a pending load releases its player item")
+    func cancellingPendingLoadReleasesPlayerItem() async {
+        let engine = AVFoundationPlaybackEngine()
+        let loadTask = Task { @MainActor in
+            try await engine.load(
+                MediaSource(url: URL(string: "https://127.0.0.1/pending.m3u8")!),
+                generation: 1
+            )
+        }
+
+        await Task.yield()
+        loadTask.cancel()
+
+        do {
+            try await loadTask.value
+            Issue.record("Cancelled load unexpectedly succeeded.")
+        } catch is CancellationError {
+            // Expected.
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+
+        await Task.yield()
+        #expect(engine.renderingPlayer.currentItem == nil)
+
+        await engine.shutdown()
+    }
+
     @Test("Play without a loaded source throws an invalid source failure")
     func playWithoutLoadedSourceThrows() async {
         let engine = AVFoundationPlaybackEngine()
