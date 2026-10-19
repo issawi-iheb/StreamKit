@@ -39,7 +39,7 @@ separate integration boundaries for DRM and advertising.
 - **Verified by unit tests** — Multiple controller/engine isolation.
 - **Not verified** — iOS 16+ behavior across supported OS versions and physical devices.
 - **In progress** — Regression coverage includes unknown-duration updates, repeated overlapping loads, explicit cancellation, and pending-item cleanup; real live AVFoundation behavior remains unverified.
-- **Implemented, unit tested; runtime verification pending** — Controllers observe audio-session interruptions, pause their own engine, and resume only when playback was requested before the interruption, automatic resumption is enabled, and iOS supplies `.shouldResume`. An explicit pause during the interruption cancels resumption. The host app owns process-wide audio-session configuration and the background-audio capability; the demo configures playback mode and includes an Audio Session & Background Playback example. Multiple controllers handle the same interruption independently; shared audio-focus arbitration is not implemented.
+- **Implemented; Siri interruption verified on a physical iPhone running iOS 26.5** — Playback paused when Siri took audio focus and resumed afterward. Unit tests also cover allowed resumption, system-disallowed resumption, and explicit pause during an interruption. Background playback, other interruption sources, routing changes, and behavior across supported OS versions remain unverified. The host app owns process-wide audio-session configuration and the background-audio capability; multiple controllers handle interruptions independently, without shared audio-focus arbitration.
 - **Implemented, pending live iOS validation** — `MediaBearerAuthentication` supplies per-resource bearer tokens through a custom AVFoundation resource loader; HLS child URLs are rewritten, HTTPS is required, and tokens are scoped to exact trusted hosts. Generic arbitrary-header configuration remains absent.
 - **Implemented, not iOS-verified** — The demo has a separate Protected Playback menu section, prefilled with a public Mux HLS baseline and its trusted host. A blank token loads ordinary HLS; entering a token exercises the bearer path for a protected URL. This public sample is not an authenticated stream. Runtime `snapshot.failure` is displayed and player controllers shut down when their owning views leave. Playlist/Playback Events remain planned placeholders; a UI navigation assertion was added.
 - **Verified by unit tests** — 86 Swift package tests pass, including per-resource token refresh callbacks, request construction, host scoping, playlist rewriting, interruption recovery policy, autoplay state, and cookie isolation.
@@ -50,20 +50,28 @@ separate integration boundaries for DRM and advertising.
 ### NEXT:
 - When protected-stream test materials are available, verify bearer authentication against a controlled HTTPS HLS origin: master and child playlists, segments, keys, ranges, redirects, token refresh, and cancellation on iOS. Public samples do not provide reusable bearer-protected media.
 - Validate failure mappings against representative real AVFoundation failures and refine unmapped cases.
-- Verify interruption begin/end, user pause during interruption, background playback, cancellation, and audio routing on iOS 16+ devices and additional supported OS versions.
+- Verify user pause during a real interruption, background playback, other interruption sources, cancellation, and audio routing on iOS 16+ devices and additional supported OS versions. Siri interruption and automatic resumption were confirmed on the user's iPhone running iOS 26.5.
 - Define and verify audio-focus behavior when multiple controllers have play intent; decide whether the host or StreamKit coordinates which controller resumes.
+- The demo target is currently set to iOS 26.5 to allow installation on the user's iOS 26.5 device. This still does not demonstrate the package's iOS 16+ support floor; decide whether to lower the demo to iOS 17 (Swift Observation floor) and verify against that runtime.
+- Make the audio-session sample's deactivation/ownership behavior explicit when leaving the example screen.
+- Execute simulator UI tests in CI and cover leaving/reopening player destinations; current CI compiles the UI-test bundle only.
 - Profile lifecycle cleanup and playback behavior with real HLS and progressive media.
 - Launch the demo on an iOS simulator and run the new bearer-auth screen when simulator services are available; generic iOS Simulator build succeeds.
 - Confirm the 32× playback-rate policy against product requirements before release.
 
 ## PHASE 2 — FairPlay DRM
 
+### CURRENT IMPLEMENTATION STATUS — IN PROGRESS
+- **Implemented, package-compiled; exchange unit-tested** — Public `FairPlayLicenseProvider`, `FairPlayLicenseRequest`, and `FairPlayConfiguration` define the app/SDK boundary. The AVFoundation engine creates an `AVContentKeySession` for configured media, attaches the `AVURLAsset`, generates SPC data, sends it to the provider, wraps returned CKC data, routes renewal requests, and cancels/removes item resources on teardown. The isolated exchange validates the content ID, certificate, SPC, CKC, and cancellation checkpoints; request responses are guarded against double completion during teardown races.
+- **Axinom public test playback verified in a live run** — The demo has a dedicated FairPlay screen for Axinom's public protected HLS vector. It preloads the public evaluation License Service Message token, fetches the evaluation FPS certificate, sends the AVFoundation SPC to the configurable license endpoint with `X-AxDRM-Message`, and returns CKC bytes. The public generic FairPlay endpoint is prefilled; tenant-specific values remain editable. User-provided diagnostics confirm license HTTP 200, AVFoundation accepted the content-key response, and playback reached `.playing`. Renewal, expiry/failure, cancellation, and source-switching still need validation. The app-specific provider lives in the demo and adds no vendor dependency to StreamKit.
+- **Unsupported** — Persistable/offline content keys are rejected by this initial online-playback implementation.
+
 ### ACCEPTANCE CRITERIA:
-- Modular FairPlay integration boundary defined and implemented
-- Certificate acquisition, SPC generation, and CKC processing functional
-- License acquisition and renewal integrated where applicable
-- Failures and cancellation handled gracefully
-- Protected HLS playback verified
+- **Verified in code/package compilation; public-vector playback user-verified** — Modular FairPlay integration boundary and Axinom demo harness implemented; device diagnostics confirm public test playback
+- **Implemented, requires provider validation** — Certificate acquisition, SPC generation, and CKC processing path
+- **Implemented, requires provider validation** — License acquisition and renewal callbacks
+- **Implemented, package behavior verified only** — Failure redaction and cancellation/teardown handling
+- **Verified in the live Axinom public-vector run** — Protected HLS playback reached `.playing` after a successful license response and AVFoundation content-key acceptance
 - Provider requirements documented
 
 ## PHASE 3 — Analytics and diagnostics
@@ -120,8 +128,8 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Baseline commit before this work**: 9e5e160 (Fix autoplay state and isolate authenticated cookies)
-- **Current phase**: Phase 1 — Core stabilization and production readiness
-- **Latest test result**: 86 Swift tests in 10 suites passed locally on macOS arm64, including an injected audio-interruption-source integration test; the demo and UI test bundle build for generic iOS Simulator succeeds, and the built app declares `UIBackgroundModes = [audio]`. Demo audio-session activation is asynchronous on iOS 27+ and dispatched off the main thread on earlier supported versions. Hosted CI run 38916346546 succeeded on the prior commit; the new interruption changes are not yet hosted-verified. Basic playback was confirmed by the user on a simulator or device; protected HLS and automated UI runtime tests remain unverified. Interactive Simulator launch could not be attempted because CoreSimulatorService has no available runtime in this environment.
-- **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes a 2026-10-16 reassessment. StreamKit is not yet production-ready against Phase 1 criteria.
-- **Next milestone**: Define multi-controller audio-focus behavior, then validate real interruption notifications and background-audio behavior on supported iOS devices and versions. Continue lifecycle and minimum-supported-iOS verification. Resume protected-HLS verification when a controlled origin and credentials are available.
+- **Latest commit**: `cb001e3` (Handle audio interruptions and background playback)
+- **Current phase**: Phase 2 — FairPlay DRM, initial provider boundary in progress; Phase 1 production-readiness issues remain open.
+- **Latest test result (2026-10-20)**: `swift test` passes **95 tests in 11 suites** on macOS arm64. Generic iOS Simulator `build-for-testing` passes on the current worktree and compiles the demo and UI test bundle; UI tests were not executed because CoreSimulatorService is unavailable. Hosted run 38916346546 predates the current FairPlay worktree. The user confirmed Siri interruption/resume on an iPhone running iOS 26.5 and Axinom public FairPlay playback reaching `.playing` after HTTP 200 and AVFoundation key acceptance. Background audio, other interruptions, routing, FairPlay renewal/failure/cancellation/source replacement, and production-origin playback remain unverified. iOS 26.5 is above the package's iOS 16+ support claim.
+- **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes the 2026-10-19 full SDK and demo reassessment. StreamKit is not yet production-ready against Phase 1 criteria.
+- **Next milestone**: Validate FairPlay renewal, invalid/expired entitlement, network failure, cancellation, and switching between protected and clear sources in the Axinom demo. The public-vector run reached `.playing` with an HTTP 200 license response and AVFoundation content-key acceptance. This verifies the demo integration for that test asset only; a production app still needs its own approved certificate and entitlement/token flow. Continue unresolved Phase 1 validation (minimum OS, broader audio focus/interruption, UI execution, and bearer HLS) as device/runtime access allows.

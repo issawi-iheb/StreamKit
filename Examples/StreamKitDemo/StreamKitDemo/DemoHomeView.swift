@@ -63,6 +63,16 @@ struct DemoHomeView: View {
                             symbol: "lock.shield"
                         )
                     }
+
+                    NavigationLink {
+                        FairPlayIntegrationDemoView()
+                    } label: {
+                        DemoNavigationRow(
+                            title: "Axinom FairPlay Test",
+                            subtitle: "Play Axinom's protected HLS test vector",
+                            symbol: "key.horizontal"
+                        )
+                    }
                 }
 
                 Section("SDK") {

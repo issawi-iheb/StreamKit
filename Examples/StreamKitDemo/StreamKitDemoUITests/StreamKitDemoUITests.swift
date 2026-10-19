@@ -58,6 +58,20 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testAxinomFairPlayExampleShowsLiveTestInputs() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["Axinom FairPlay Test"].tap()
+
+        XCTAssertTrue(app.textFields["Protected HLS manifest URL"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.textFields["FairPlay certificate URL"].exists)
+        XCTAssertTrue(app.textFields["FairPlay license URL"].exists)
+        XCTAssertTrue(app.secureTextFields["Axinom license token"].exists)
+        XCTAssertTrue(app.buttons["fairPlayLoadProtectedStream"].exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

@@ -93,6 +93,32 @@ struct AVFoundationPlaybackEngineTests {
         await engine.shutdown()
     }
 
+    @Test("Rejects FairPlay media unless its URL uses HTTPS")
+    func rejectsInsecureFairPlaySource() async {
+        let engine = AVFoundationPlaybackEngine()
+        let source = MediaSource(
+            url: URL(string: "http://media.example.com/protected.m3u8")!,
+            requestConfiguration: MediaRequestConfiguration(
+                fairPlay: FairPlayConfiguration(
+                    licenseProvider: EngineTestFairPlayProvider()
+                )
+            )
+        )
+
+        do {
+            try await engine.load(source, generation: 1)
+            Issue.record("Expected insecure FairPlay media to be rejected.")
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .unsupportedConfiguration)
+            #expect(failure.message == "FairPlay-protected media must use HTTPS.")
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+
+        #expect(engine.renderingPlayer.currentItem == nil)
+        await engine.shutdown()
+    }
+
     @Test("Play without a loaded source throws an invalid source failure")
     func playWithoutLoadedSourceThrows() async {
         let engine = AVFoundationPlaybackEngine()
@@ -208,5 +234,20 @@ struct AVFoundationPlaybackEngineTests {
         } catch {
             Issue.record("Unexpected error after shutdown: \(error)")
         }
+    }
+}
+
+private struct EngineTestFairPlayProvider: FairPlayLicenseProvider {
+    func applicationCertificate() async throws -> Data { Data([1]) }
+
+    func contentIdentifier(
+        for keyIdentifier: String,
+        initializationData: Data?
+    ) throws -> Data {
+        Data(keyIdentifier.utf8)
+    }
+
+    func contentKey(for request: FairPlayLicenseRequest) async throws -> Data {
+        Data([2])
     }
 }

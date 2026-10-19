@@ -37,6 +37,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     // Current item identity and generation.
     private var observedItem: AVPlayerItem?
     private var authenticatedResourceLoader: AuthenticatedMediaResourceLoader?
+    private var fairPlayContentKeySession: FairPlayContentKeySession?
     private var loadGeneration: UInt64 = 0
     private var activeSourceGeneration: UInt64 = 0
 
@@ -70,6 +71,14 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             throw shutdownFailure()
         }
 
+        if source.requestConfiguration.fairPlay != nil,
+           source.url.scheme?.lowercased() != "https" {
+            throw PlaybackFailure(
+                code: .unsupportedConfiguration,
+                message: "FairPlay-protected media must use HTTPS."
+            )
+        }
+
         activeSourceGeneration = sourceGeneration
 
         loadGeneration &+= 1
@@ -79,6 +88,8 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         removePlaybackObservers()
         authenticatedResourceLoader?.cancelAll()
         authenticatedResourceLoader = nil
+        fairPlayContentKeySession?.invalidate()
+        fairPlayContentKeySession = nil
         loadGeneration = engineGeneration
         cancelPendingReadiness()
         player.pause()
@@ -133,6 +144,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             let asset = AVURLAsset(url: assetURL, options: assetOptions)
             asset.resourceLoader.setDelegate(resourceLoader, queue: resourceLoader.delegateQueue)
             let item = AVPlayerItem(asset: asset)
+            configureFairPlay(for: asset, configuration: request.fairPlay)
             observedItem = item
             player.replaceCurrentItem(with: item)
 
@@ -145,6 +157,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
         let asset = AVURLAsset(url: assetURL, options: assetOptions)
         let item = AVPlayerItem(asset: asset)
+        configureFairPlay(for: asset, configuration: request.fairPlay)
 
         observedItem = item
         player.replaceCurrentItem(with: item)
@@ -209,8 +222,20 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         removePlaybackObservers()
         authenticatedResourceLoader?.cancelAll()
         authenticatedResourceLoader = nil
+        fairPlayContentKeySession?.invalidate()
+        fairPlayContentKeySession = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
+    }
+
+    private func configureFairPlay(
+        for asset: AVURLAsset,
+        configuration: FairPlayConfiguration?
+    ) {
+        guard let configuration else { return }
+        let contentKeySession = FairPlayContentKeySession(configuration: configuration)
+        fairPlayContentKeySession = contentKeySession
+        contentKeySession.addRecipient(asset)
     }
 
     private func handleItemStatus(
@@ -745,6 +770,8 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         removePlaybackObservers()
         authenticatedResourceLoader?.cancelAll()
         authenticatedResourceLoader = nil
+        fairPlayContentKeySession?.invalidate()
+        fairPlayContentKeySession = nil
 
         player.pause()
         player.replaceCurrentItem(with: nil)

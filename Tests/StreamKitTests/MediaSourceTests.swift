@@ -31,6 +31,7 @@ struct MediaSourceTests {
 
         #expect(source.requestConfiguration.cookies.isEmpty)
         #expect(source.requestConfiguration.userAgent == nil)
+        #expect(source.requestConfiguration.fairPlay == nil)
     }
 
     @Test("Preserves cookies and user agent")
@@ -93,6 +94,34 @@ struct MediaSourceTests {
         #expect(first != second)
     }
 
+    @Test("Preserves FairPlay configuration and compares its identity")
+    func preservesFairPlayConfiguration() {
+        let url = URL(string: "https://media.example.com/protected.m3u8")!
+        let provider = TestFairPlayLicenseProvider()
+        let fairPlay = FairPlayConfiguration(licenseProvider: provider)
+        let configuration = MediaRequestConfiguration(fairPlay: fairPlay)
+        let source = MediaSource(url: url, requestConfiguration: configuration)
+
+        #expect(source.requestConfiguration.fairPlay == fairPlay)
+        #expect(configuration == MediaRequestConfiguration(fairPlay: fairPlay))
+        #expect(configuration != MediaRequestConfiguration(
+            fairPlay: FairPlayConfiguration(licenseProvider: provider)
+        ))
+    }
+
+    @Test("Preserves FairPlay license request fields")
+    func preservesFairPlayLicenseRequest() {
+        let request = FairPlayLicenseRequest(
+            contentIdentifier: Data([1, 2]),
+            streamingContentKeyRequest: Data([3, 4]),
+            isRenewal: true
+        )
+
+        #expect(request.contentIdentifier == Data([1, 2]))
+        #expect(request.streamingContentKeyRequest == Data([3, 4]))
+        #expect(request.isRenewal)
+    }
+
     @Test("Bearer tokens are requested only for explicitly trusted HTTPS hosts")
     func bearerAuthenticationIsHostScoped() async throws {
         let authentication = MediaBearerAuthentication(trustedHosts: ["MEDIA.example.com"]) { url in
@@ -106,5 +135,20 @@ struct MediaSourceTests {
         #expect(try await authentication.authorizationHeader(for: trustedURL) == "Bearer token-for-/master.m3u8")
         #expect(try await authentication.authorizationHeader(for: untrustedURL) == nil)
         #expect(try await authentication.authorizationHeader(for: insecureURL) == nil)
+    }
+}
+
+private struct TestFairPlayLicenseProvider: FairPlayLicenseProvider {
+    func applicationCertificate() async throws -> Data { Data([1]) }
+
+    func contentIdentifier(
+        for keyIdentifier: String,
+        initializationData: Data?
+    ) throws -> Data {
+        Data(keyIdentifier.utf8)
+    }
+
+    func contentKey(for request: FairPlayLicenseRequest) async throws -> Data {
+        Data([2])
     }
 }
