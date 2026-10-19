@@ -176,10 +176,7 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
                 request,
                 identifier: identifier,
                 response: nil,
-                error: PlaybackFailure(
-                    code: .authentication,
-                    message: "The FairPlay license request failed."
-                )
+                error: FairPlayErrorMapping.playbackFailure(for: error)
             )
         }
     }

@@ -61,3 +61,13 @@ struct FairPlayKeyExchange: Sendable {
         return ckc
     }
 }
+
+/// Keeps provider details and DRM payload metadata out of public playback errors.
+enum FairPlayErrorMapping {
+    static func playbackFailure(for _: any Error) -> PlaybackFailure {
+        PlaybackFailure(
+            code: .authentication,
+            message: "The FairPlay license request failed."
+        )
+    }
+}

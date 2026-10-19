@@ -7,6 +7,8 @@ A reusable Swift media-player SDK for iOS 16+ built with Swift 6.4. StreamKit pr
 - iOS 16.0 or later
 - Swift 6.4 toolchain
 
+The package declares iOS 16 support. The demo project currently targets iOS 26.5 and does not yet validate the package's minimum deployment target; this is tracked in the roadmap.
+
 ## Installation
 
 ### Swift Package Manager
@@ -223,7 +225,7 @@ let handle = controller.load(source)
 try await handle.waitUntilReady()
 ```
 
-See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for the provider contract and request lifecycle. The demo includes a dedicated Axinom FairPlay test screen for its public protected HLS vector. The manifest, public evaluation certificate, generic FairPlay license endpoint, and public evaluation token for that vector are prefilled. A user-provided live run confirmed HTTP 200 from the license endpoint, AVFoundation key acceptance, and playback reaching `.playing`. The token is included in the demo source and compiled sample solely for Axinom's public test asset; do not put production tokens in source. You can enter your own tenant values at runtime. Diagnostics omit the token and DRM payloads. This is an evaluation harness, not production credential management: use your app-approved FPS certificate and secure entitlement/token flow in production. Renewal and failure cases remain to be validated, and offline/persistable keys are not supported. If the HLS origin also needs bearer authorization, configure that separately; FairPlay license-server authentication remains the provider's responsibility.
+See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for the provider contract and request lifecycle. The demo includes a dedicated Axinom FairPlay test screen for its public protected HLS vector. The manifest, public evaluation certificate, generic FairPlay license endpoint, and public evaluation token for that vector are prefilled. A user-provided live run confirmed HTTP 200 from the license endpoint, AVFoundation key acceptance, and playback reaching `.playing`. The token is included in the demo source and compiled sample solely for Axinom's public test asset; do not put production tokens in source. You can enter your own tenant values at runtime. Diagnostics omit the token and DRM payloads. This is an evaluation harness, not production credential management: use your app-approved FPS certificate and secure entitlement/token flow in production. End-to-end renewal and real entitlement-rejection behavior require provider-issued test materials. Package tests simulate provider rejection/network errors, empty CKC, cancellation, and public-error redaction; they do not simulate HTTP parsing, AVFoundation key challenges, or real renewal. Offline/persistable keys are not supported. If the HLS origin also needs bearer authorization, configure that separately; FairPlay license-server authentication remains the provider's responsibility.
 
 ## Documentation
 
@@ -238,8 +240,8 @@ See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for t
 - iOS only (no macOS/tvOS/watchOS support)
 - AVFoundation-based playback only
 - No built-in UI controls (use StreamVideoView with custom controls)
-- No advertising; FairPlay playback still requires a consuming-app provider and has not been end-to-end verified
-- Picture-in-Picture requires additional implementation
+- No advertising; the public Axinom FairPlay vector is verified, while customer-provider renewal and failure scenarios remain unverified
+- Picture-in-Picture, AirPlay presentation, and automatic fullscreen/landscape behavior are not implemented
 - Offline playback requires application-level file handling
 
 ## Example Application
@@ -251,7 +253,7 @@ See the [StreamKitDemo](Examples/StreamKitDemo/) target for a complete example s
 - Concurrent independent players
 - Error handling scenarios
 - Host-scoped bearer authentication for protected HLS streams
-- FairPlay provider integration requirements (no credentials or protected asset included)
+- Dedicated Axinom public FairPlay test vector and provider-integration guide
 - Audio-session interruption recovery and background audio setup
 
 The demo's separate **Protected Playback** section is prefilled with a public Mux HLS sample (`https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`) and its trusted host. Leave the token blank to check ordinary HLS playback. To exercise bearer authentication, replace the URL and trusted-host list with a protected stream you control and enter its valid development token. The public sample is not bearer-protected and does not verify authenticated playback.
