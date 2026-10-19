@@ -480,6 +480,7 @@ The user supplied a later diagnostic report with phase `.playing` and intent `.p
 
 ### Local verification of the FairPlay integration — 2026-10-20
 
+- Reviewed implementation revision: `0effdeb` (`Add FairPlay playback integration and Axinom demo`).
 - `swift test`: **95 tests in 11 suites passed** on macOS arm64.
 - `xcodebuild ... build-for-testing`: succeeded for generic iOS Simulator, compiling the package, demo, and UI test bundle.
 - UI tests were not executed; CoreSimulatorService is unavailable in this environment. The user's live playback report is separate real-runtime evidence for the Axinom public vector.

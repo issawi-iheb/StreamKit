@@ -128,7 +128,7 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Latest commit**: `cb001e3` (Handle audio interruptions and background playback)
+- **Latest implementation commit**: `0effdeb` (Add FairPlay playback integration and Axinom demo)
 - **Current phase**: Phase 2 — FairPlay DRM, initial provider boundary in progress; Phase 1 production-readiness issues remain open.
 - **Latest test result (2026-10-20)**: `swift test` passes **95 tests in 11 suites** on macOS arm64. Generic iOS Simulator `build-for-testing` passes on the current worktree and compiles the demo and UI test bundle; UI tests were not executed because CoreSimulatorService is unavailable. Hosted run 38916346546 predates the current FairPlay worktree. The user confirmed Siri interruption/resume on an iPhone running iOS 26.5 and Axinom public FairPlay playback reaching `.playing` after HTTP 200 and AVFoundation key acceptance. Background audio, other interruptions, routing, FairPlay renewal/failure/cancellation/source replacement, and production-origin playback remain unverified. iOS 26.5 is above the package's iOS 16+ support claim.
 - **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes the 2026-10-19 full SDK and demo reassessment. StreamKit is not yet production-ready against Phase 1 criteria.
