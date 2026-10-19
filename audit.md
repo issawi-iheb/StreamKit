@@ -253,3 +253,29 @@ The full Swift test suite passes:
 
 The original audit findings above describe the implementation at the
 time of that audit. Use this follow-up to interpret their current status.
+
+## Current Reconciliation — 2026-10-20
+
+This historical audit is not the current readiness verdict. Use
+[PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) for the full
+assessment and [ROADMAP.md](ROADMAP.md) for sequencing.
+
+- **AUDIT-001 — Resolved.** Generation-tagged engine events and the
+  `ignoresEventFromPreviousSource` regression test prevent a previous source
+  from overwriting the current snapshot.
+- **AUDIT-002 — Not confirmed as a defect.** Cleanup depends on the caller
+  invoking the documented async `shutdown()` lifecycle. The current audit
+  treats this as an integration/lifecycle ergonomics concern, not a proven
+  resource leak; an asynchronous actor-owned cleanup should not be inferred
+  safe to run from `deinit`.
+- **AUDIT-003 — Harmless cleanup remains.** The engine still assigns the
+  just-computed `engineGeneration` back to `loadGeneration`; this is redundant
+  and has no demonstrated behavioral impact.
+- **AUDIT-004 through AUDIT-007 — Rejected in the original review.** Their
+  weak-capture, optional initialization, actor-isolation, and force-unwrap
+  concerns were not valid defects.
+- **Verification is superseded.** The old 33-test count and “not ready because
+  of AUDIT-001” verdict are historical. Revision `7a470c2` passes 99 tests in
+  11 suites. Production readiness is still open for reasons recorded in the
+  current audit: platform/CI evidence, real protected-origin coverage, DRM
+  lifecycle acceptance, player presentation features, and operations support.
