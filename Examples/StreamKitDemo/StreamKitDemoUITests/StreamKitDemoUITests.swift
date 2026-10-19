@@ -47,6 +47,17 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testAudioSessionExampleExplainsInterruptionAndBackgroundPlayback() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["Audio Session & Background Playback"].tap()
+
+        XCTAssertTrue(app.staticTexts["Audio session and interruption handling"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Playback phase"].exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

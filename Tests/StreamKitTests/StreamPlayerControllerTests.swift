@@ -121,6 +121,152 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("Audio interruptions pause playback and resume when the system allows it")
+    func resumesAfterAllowedAudioInterruption() async throws {
+        let engine = MockPlaybackEngine()
+        let interruptionSource = MockAudioInterruptionSource()
+        let controller = StreamPlayerController(
+            engine: engine,
+            audioInterruptionSource: interruptionSource
+        )
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+        try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: controller)
+
+        interruptionSource.send(.began)
+        await waitForPhase(.paused, controller: controller)
+
+        #expect(controller.snapshot.phase == .paused)
+        #expect(controller.snapshot.intent == .play)
+        #expect(engine.pauseCallCount == 1)
+
+        interruptionSource.send(.ended(systemAllowsResume: true))
+        await waitForPlayCallCount(2, engine: engine)
+
+        #expect(engine.playCallCount == 2)
+        #expect(controller.snapshot.intent == .play)
+        await controller.shutdown()
+        #expect(interruptionSource.shutdownCallCount == 1)
+    }
+
+    @Test("Audio interruption does not resume when the system disallows it")
+    func doesNotResumeWhenSystemDisallowsAudioInterruptionResume() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(engine: engine)
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+        try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: controller)
+
+        await controller.handleAudioSessionInterruption(.began)
+        await controller.handleAudioSessionInterruption(
+            .ended(systemAllowsResume: false)
+        )
+
+        #expect(engine.playCallCount == 1)
+        #expect(controller.snapshot.phase == .paused)
+        #expect(controller.snapshot.intent == .play)
+        await controller.shutdown()
+    }
+
+    @Test("Audio interruption resumption can be disabled by configuration")
+    func canDisableAutomaticAudioInterruptionResume() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(
+                automaticallyResumesAfterAudioInterruption: false
+            ),
+            engine: engine
+        )
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+        try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: controller)
+
+        await controller.handleAudioSessionInterruption(.began)
+        await controller.handleAudioSessionInterruption(
+            .ended(systemAllowsResume: true)
+        )
+
+        #expect(engine.playCallCount == 1)
+        #expect(controller.snapshot.phase == .paused)
+        await controller.shutdown()
+    }
+
+    @Test("An interrupted autoplay load does not start when the system disallows resumption")
+    func interruptedAutoplayRespectsSystemResumeDecision() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: true),
+            engine: engine
+        )
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+
+        await controller.handleAudioSessionInterruption(.began)
+        await controller.handleAudioSessionInterruption(
+            .ended(systemAllowsResume: false)
+        )
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        #expect(engine.playCallCount == 0)
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .play)
+
+        try await controller.play()
+        #expect(engine.playCallCount == 1)
+        await controller.shutdown()
+    }
+
+    @Test("An explicit pause during interruption cancels automatic resumption")
+    func explicitPauseDuringInterruptionPreventsResume() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(engine: engine)
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+        try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: controller)
+
+        await controller.handleAudioSessionInterruption(.began)
+        await controller.pause()
+        await controller.handleAudioSessionInterruption(
+            .ended(systemAllowsResume: true)
+        )
+
+        #expect(engine.playCallCount == 1)
+        #expect(controller.snapshot.phase == .paused)
+        #expect(controller.snapshot.intent == .pause)
+        await controller.shutdown()
+    }
+
     @Test("Time updates preserve an unknown duration")
     func timeUpdatesPreserveUnknownDuration() async throws {
         let engine = MockPlaybackEngine()
@@ -523,7 +669,7 @@ struct StreamPlayerControllerTests {
         // Simulate playback actually starting.
         engine.emit(.playing, fromLoad: 1)
         engine.deliverQueuedEvents()
-        await Task.yield()
+        await waitForPhase(.playing, controller: controller)
         await controller.pause()
 
         #expect(controller.snapshot.phase == .paused)
@@ -1061,5 +1207,37 @@ struct StreamPlayerControllerTests {
                 return
             }
         }
+    }
+}
+
+@MainActor
+private final class MockAudioInterruptionSource: AudioInterruptionSource {
+    private let continuation: AsyncStream<AudioSessionInterruption>.Continuation
+    let events: AsyncStream<AudioSessionInterruption>
+    private(set) var shutdownCallCount = 0
+
+    init() {
+        var captured: AsyncStream<AudioSessionInterruption>.Continuation!
+        events = AsyncStream { captured = $0 }
+        continuation = captured
+    }
+
+    func send(_ event: AudioSessionInterruption) {
+        continuation.yield(event)
+    }
+
+    func shutdown() {
+        shutdownCallCount += 1
+        continuation.finish()
+    }
+}
+
+@MainActor
+private func waitForPlayCallCount(
+    _ expected: Int,
+    engine: MockPlaybackEngine
+) async {
+    for _ in 0..<100 where engine.playCallCount < expected {
+        await Task.yield()
     }
 }

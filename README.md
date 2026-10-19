@@ -148,6 +148,26 @@ try await controller.selectSubtitleTrack(id: "subtitle-track-456")
 
 Track selection requires media to be ready (not idle, loading, or failed).
 
+## Audio Sessions, Interruptions, and Background Playback
+
+StreamKit observes iOS audio-session interruptions for each controller. By default, it resumes playback only when playback was requested before the interruption and iOS reports that resuming is appropriate. An explicit `pause()` during the interruption cancels automatic resumption. Set `automaticallyResumesAfterAudioInterruption: false` in `PlayerConfiguration` to disable that behavior.
+
+`AVAudioSession` is process-wide, so the host application owns its category, mode, and activation policy. For background audio, the host must also enable the `audio` background mode in its app target. The StreamKit demo's **Audio Session & Background Playback** example shows this setup; the package cannot add app capabilities to a consuming application.
+
+Each live controller responds to process-wide interruptions independently. If an app has multiple controllers with play intent, each may resume when iOS allows it; the host app remains responsible for choosing which player owns audio until StreamKit defines a shared audio-focus policy.
+
+The demo uses asynchronous audio-session activation on iOS 27 and later. On earlier supported versions, it runs the legacy activation call away from the main thread. Its simulated interruption controls exercise StreamKit's response to begin/end events; real Siri, call, route, and background behavior still needs OS/device verification.
+
+```swift
+let controller = StreamPlayerController(
+    configuration: PlayerConfiguration(
+        automaticallyResumesAfterAudioInterruption: true
+    )
+)
+```
+
+Interruption and background behavior should be validated on the target iOS versions and devices. A simulator build alone does not verify runtime audio routing or background execution.
+
 ## Lifecycle and Cancellation
 
 ### Loading Operations
@@ -213,9 +233,10 @@ See the [StreamKitDemo](Examples/StreamKitDemo/) target for a complete example s
 - Concurrent independent players
 - Error handling scenarios
 - Host-scoped bearer authentication for protected HLS streams
+- Audio-session interruption recovery and background audio setup
 
 The demo's separate **Protected Playback** section is prefilled with a public Mux HLS sample (`https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`) and its trusted host. Leave the token blank to check ordinary HLS playback. To exercise bearer authentication, replace the URL and trusted-host list with a protected stream you control and enter its valid development token. The public sample is not bearer-protected and does not verify authenticated playback.
 
 ## Continuous Integration
 
-GitHub Actions runs the Swift package tests and builds the demo plus UI test bundle with the Xcode 27 runner. The hosted Xcode 27 image is currently a public preview. UI tests are compiled in CI; they still require a simulator runtime to execute. The workflow has been added, but its first hosted run is pending.
+GitHub Actions runs the Swift package tests and builds the demo plus UI test bundle with the Xcode 27 runner. The hosted Xcode 27 image is currently a public preview. CI run 38916346546 succeeded. UI tests are compiled in CI; they still require a simulator runtime to execute.

@@ -22,6 +22,15 @@
 - Playback resumes after buffering when intent is `.play`
 - Playback remains paused after buffering when intent is `.pause`
 - State changes are published through playback snapshots
+- Each controller consumes interruption events from an injected `AudioInterruptionSource`. The system adapter owns the iOS notification subscription and translates notifications into small `Sendable` events; the controller applies policy, pauses its own engine, and conditionally resumes when the interruption ends. Resumption requires a prior play intent, the configured policy, and iOS's `shouldResume` indication.
+
+## Audio Session Ownership
+- `AVAudioSession` is process-wide; the host app owns its category, mode, activation, and background-audio capability.
+- StreamKit observes interruptions per controller. The adapter owns and removes its notification observer during `shutdown()`, while tests inject a controllable source without depending on global notification state.
+- `PlayerConfiguration.automaticallyResumesAfterAudioInterruption` defaults to `true`; explicit user pause during an interruption prevents resumption.
+- Every live controller independently handles the same process-wide interruption. StreamKit does not yet arbitrate audio focus when multiple controllers have play intent; hosts should manage that policy until a shared focus policy is defined.
+- The demo configures `.playback` / `.moviePlayback`, activates the session asynchronously on iOS 27+ (and off the main thread on earlier supported releases), and opts into the `audio` background mode. A consuming app must configure its own target similarly if it needs background audio.
+- The demo's synthetic interruption controls exercise notification translation and controller policy; they do not emulate iOS audio routing, Siri, calls, or background execution.
 
 ## Platform Boundary
 - **Platform-independent**: Intent, Phase, Snapshot, Failure enums

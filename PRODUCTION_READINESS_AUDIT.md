@@ -4,7 +4,7 @@
 
 This living report tracks StreamKit's production-readiness review against Phase 1 of the roadmap. The original findings below reflect earlier revisions; the later follow-up is authoritative when statuses or verification counts differ.
 
-**Current status (2026-10-16):** StreamKit has a sound playback foundation and 81 passing Swift tests across 10 suites. The user confirmed basic demo playback on an iOS simulator or device. The package is **not yet production-ready**: protected HLS has not been exercised against a controlled origin on iOS, broader lifecycle and interruption behavior need verification, and the new CI workflow has not yet had its first hosted run.
+**Current status (2026-10-16):** StreamKit has a sound playback foundation and 86 passing Swift tests across 10 suites. The user confirmed basic demo playback on an iOS simulator or device. Hosted CI run [38916346546](https://github.com/issawi-iheb/StreamKit/actions/runs/38916346546) succeeded on the prior commit, including package tests and a generic iOS Simulator build of the demo and UI test bundle; the new interruption changes are not yet hosted-verified. The package is **not yet production-ready**: protected HLS has not been exercised against a controlled origin on iOS, and audio-session behavior still needs device verification.
 
 ## Original Audit Scope and Limitations (Historical Snapshot)
 
@@ -399,7 +399,7 @@ This follow-up supersedes the corresponding open items above where code or verif
 ### Verification
 
 - Before the two latest regression tests, `swift test` passed **79 tests in 10 suites** on macOS arm64 (Xcode 27.0 toolchain).
-- After the state and cookie-isolation fixes, `swift test` passes **81 tests in 10 suites**.
+- At that revision, after the state and cookie-isolation fixes, `swift test` passed **81 tests in 10 suites**.
 - `git diff --check`: clean.
 - `xcodebuild build-for-testing` succeeded for the generic iOS Simulator destination, compiling the SDK, demo, and UI test bundle. Simulator test execution/runtime checks could not run in this audit environment because CoreSimulatorService was unavailable and no simulator runtime could be enumerated. The user later confirmed basic demo playback on a simulator or device; protected playback remains unverified.
 - The updated sample menu and flow compiled with `xcodebuild build-for-testing`; its bearer-auth UI test compiled but could not run without CoreSimulator in this environment. The public Mux stream has not been treated as an authenticated-origin test.
@@ -409,7 +409,20 @@ This follow-up supersedes the corresponding open items above where code or verif
 - Bearer resource loading and playlist rewriting have unit coverage but have not been exercised against a live protected HLS origin on iOS. No reusable public HLS endpoint with bearer-protected playlists and segments was identified; the public sample only checks basic playback. Use a controlled protected origin to validate segments/keys, ranges, redirects, token expiry/refresh, and AVFoundation cancellation on simulator/device before advertising support broadly.
 - Audio-session interruption/background behavior, lifecycle profiling, and minimum-supported iOS behavior still need broader simulator/device validation.
 - The user confirmed basic sample playback on a simulator or device; UI automation and teardown behavior still need CI/device execution.
-- The GitHub Actions workflow is in place, but its first hosted run remains pending. It uses GitHub's Xcode 27 runner label.
+- The GitHub Actions workflow passed hosted run 38916346546 on GitHub's Xcode 27 runner. The run validates package tests and compilation of the demo/UI test bundle; it does not execute playback on a simulator or validate interruptions.
 - The 32× rate ceiling remains an SDK policy pending product confirmation.
+
+## Audio Session and Background Playback Follow-up — 2026-10-19
+
+- `PlayerConfiguration.automaticallyResumesAfterAudioInterruption` defaults to `true`. The controller observes iOS audio-session interruption notifications, pauses its engine at interruption start, and resumes only if it had a `.play` intent, playback was in an active or starting phase, the policy is enabled, and the interruption-end notification includes `.shouldResume`.
+- If the application calls `pause()` during an interruption, the intent becomes `.pause` and playback will not resume automatically. The controller removes its notification observer during shutdown.
+- The host app retains ownership of process-wide `AVAudioSession` category, mode, and activation. Background audio also requires the consuming app to enable the `audio` background mode. The demo now configures `.playback` / `.moviePlayback`, activates the session, enables the background mode, and provides a dedicated example screen.
+- The demo activates asynchronously with Apple's iOS 27 API. On earlier supported releases, it calls the legacy activation method on a background queue to avoid blocking the UI thread.
+- The Audio Session example includes controls that post synthetic interruption notifications. These validate StreamKit's event parsing and recovery policy in the demo, but do not verify that iOS generates interruptions or that background audio/routing works on a device.
+- Unit tests cover allowed resumption, system-disallowed resumption, and explicit pause during an interruption. The controller now receives events through an injected `AudioInterruptionSource`; the system adapter owns notification parsing and cleanup, and tests can drive that boundary without posting process-wide notifications. Tests still do not generate real iOS audio-session notifications.
+- Interruption handling is per controller. If multiple controllers have play intent, each independently handles the shared notification and may resume; StreamKit has no shared audio-focus arbiter yet. The host must coordinate active audio ownership until this policy is defined.
+- The local iOS Simulator generic build compiles the demo and UI-test bundle. Runtime launch is currently unavailable in this environment because CoreSimulatorService cannot find or connect to an installed Simulator runtime.
+- **Not yet device-verified:** interruption notifications, background execution, audio routing, and behavior across iOS versions still require simulator/device validation. The successful hosted CI run compiles the demo/UI-test bundle but does not run the UI tests or validate audio behavior.
+- **Latest local verification:** `swift test` passes **86 tests in 10 suites**. `xcodebuild build-for-testing` succeeds for the generic iOS Simulator, and inspection of the built demo confirms `UIBackgroundModes` is an array containing `audio`.
 
 **Readiness remains: not production-ready.** Basic demo playback has been user-verified. Keep work in Phase 1; validate the authenticated resource loader against a controlled protected HLS origin and complete broader iOS runtime checks before Phase 2.

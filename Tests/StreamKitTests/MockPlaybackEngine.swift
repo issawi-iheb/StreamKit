@@ -14,6 +14,8 @@ final class MockPlaybackEngine: PlaybackEngine {
     private var nextSeekID = 0
     private(set) var seekTimes: [TimeInterval] = []
     private(set) var playbackRate: Float = 1.0
+    private(set) var playCallCount = 0
+    private(set) var pauseCallCount = 0
     private var registeredLoadIDs: Set<Int> = []
     private var loadRegistrationWaiters: [
         Int: [CheckedContinuation<Void, Never>]
@@ -150,11 +152,14 @@ final class MockPlaybackEngine: PlaybackEngine {
     // MARK: - PlaybackEngine
 
     func play() async throws {
+        playCallCount += 1
         // Intentionally emit no event.
         // Tests must explicitly control when playback events occur.
     }
 
-    func pause() async {}
+    func pause() async {
+        pauseCallCount += 1
+    }
 
     func setPlaybackRate(_ rate: Float) async throws {
         playbackRate = rate

@@ -13,6 +13,16 @@ struct DemoHomeView: View {
             List {
                 Section("Playback") {
                     NavigationLink {
+                        AudioSessionDemoView()
+                    } label: {
+                        DemoNavigationRow(
+                            title: "Audio Session & Background Playback",
+                            subtitle: "Interruption recovery and background audio",
+                            symbol: "waveform"
+                        )
+                    }
+
+                    NavigationLink {
                         StandalonePlayerDemoView()
                     } label: {
                         DemoNavigationRow(

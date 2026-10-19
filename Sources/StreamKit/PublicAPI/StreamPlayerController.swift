@@ -43,6 +43,12 @@ public final class StreamPlayerController {
     private var eventTask: Task<Void, Never>?
     private var activeLoadTask: Task<Void, Error>?
 
+    private let audioInterruptionSource: any AudioInterruptionSource
+    private var audioInterruptionTask: Task<Void, Never>?
+    private var isAudioInterrupted = false
+    private var wasPlayingBeforeAudioInterruption = false
+    private var audioInterruptionRequiresExplicitPlay = false
+
     /// Identifies the current source-loading operation.
     private var loadGeneration: UInt64 = 0
 
@@ -55,12 +61,14 @@ public final class StreamPlayerController {
     ) {
         self.configuration = configuration
         self.engine = AVFoundationPlaybackEngine()
+        self.audioInterruptionSource = SystemAudioInterruptionSource()
         self.snapshot = PlaybackSnapshot(
             phase: .idle,
             intent: .pause
         )
 
         observeEngineEvents()
+        observeAudioSessionInterruptions()
     }
 
     internal init(
@@ -69,12 +77,28 @@ public final class StreamPlayerController {
     ) {
         self.configuration = configuration
         self.engine = engine
+        self.audioInterruptionSource = SystemAudioInterruptionSource()
         self.snapshot = PlaybackSnapshot(
             phase: .idle,
             intent: .pause
         )
 
         observeEngineEvents()
+        observeAudioSessionInterruptions()
+    }
+
+    internal init(
+        configuration: PlayerConfiguration = .init(),
+        engine: any PlaybackEngine,
+        audioInterruptionSource: any AudioInterruptionSource
+    ) {
+        self.configuration = configuration
+        self.engine = engine
+        self.audioInterruptionSource = audioInterruptionSource
+        self.snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
+
+        observeEngineEvents()
+        observeAudioSessionInterruptions()
     }
 
     // MARK: - Loading
@@ -121,7 +145,9 @@ public final class StreamPlayerController {
                         )
                     )
 
-                    try await engine.play()
+                    if !isAudioInterrupted && !audioInterruptionRequiresExplicitPlay {
+                        try await engine.play()
+                    }
 
                     guard !isShutdown,
                           loadGeneration == generation
@@ -176,6 +202,7 @@ public final class StreamPlayerController {
     private func beginLoading() -> UInt64 {
         loadGeneration &+= 1
         let generation = loadGeneration
+        audioInterruptionRequiresExplicitPlay = false
 
         activeLoadTask?.cancel()
         activeLoadTask = nil
@@ -202,6 +229,10 @@ public final class StreamPlayerController {
             throw shutdownFailure()
         }
 
+        if !isAudioInterrupted {
+            audioInterruptionRequiresExplicitPlay = false
+        }
+
         switch snapshot.phase {
         case .idle:
             throw PlaybackFailure(
@@ -212,6 +243,9 @@ public final class StreamPlayerController {
         case .loading:
             // The loading task will start playback when ready.
             updateIntent(.play)
+            if isAudioInterrupted {
+                wasPlayingBeforeAudioInterruption = true
+            }
             return
 
         case .failed:
@@ -226,6 +260,13 @@ public final class StreamPlayerController {
 
         case .ready, .paused, .waiting, .ended:
             updateIntent(.play)
+        }
+
+        if isAudioInterrupted {
+            // Keep the request. The interruption-end handler will retry if
+            // the system permits automatic resumption.
+            wasPlayingBeforeAudioInterruption = true
+            return
         }
 
         do {
@@ -370,6 +411,89 @@ public final class StreamPlayerController {
         }
     }
 
+    private func observeAudioSessionInterruptions() {
+        let events = audioInterruptionSource.events
+        audioInterruptionTask = Task { @MainActor [weak self] in
+            for await interruption in events {
+                guard let self else { break }
+                await self.handleAudioSessionInterruption(interruption)
+            }
+        }
+    }
+
+    /// Applies an audio-session interruption. Kept internal so the policy can
+    /// be exercised without depending on system notifications in unit tests.
+    func handleAudioSessionInterruption(
+        _ interruption: AudioSessionInterruption
+    ) async {
+        guard !isShutdown else {
+            return
+        }
+
+        switch interruption {
+        case .began:
+            guard !isAudioInterrupted else {
+                return
+            }
+
+            isAudioInterrupted = true
+            wasPlayingBeforeAudioInterruption = snapshot.intent == .play && [
+                .loading, .ready, .playing, .waiting
+            ].contains(snapshot.phase)
+
+            await engine.pause()
+
+            switch snapshot.phase {
+            case .playing, .waiting, .ready:
+                updatePhase(.paused)
+            case .idle, .loading, .paused, .ended, .failed:
+                break
+            }
+
+        case let .ended(systemAllowsResume):
+            guard isAudioInterrupted else {
+                return
+            }
+
+            isAudioInterrupted = false
+            let shouldResume = systemAllowsResume
+                && configuration.automaticallyResumesAfterAudioInterruption
+                && wasPlayingBeforeAudioInterruption
+                && snapshot.intent == .play
+            audioInterruptionRequiresExplicitPlay = snapshot.intent == .play && !shouldResume
+            wasPlayingBeforeAudioInterruption = false
+
+            guard shouldResume else {
+                return
+            }
+
+            // If loading is still in progress, its readiness task will start
+            // playback now that the interruption has ended.
+            guard snapshot.phase != .loading else {
+                return
+            }
+
+            do {
+                try await engine.play()
+            } catch {
+                guard !isShutdown else {
+                    return
+                }
+
+                let failure = PlaybackFailureMapping.map(error)
+                updateSnapshot(
+                    PlaybackSnapshot(
+                        phase: .failed,
+                        intent: .pause,
+                        currentTime: snapshot.currentTime,
+                        duration: snapshot.duration,
+                        failure: failure
+                    )
+                )
+            }
+        }
+    }
+
     private func handleEngineEvent(
         _ event: PlaybackEngineEvent
     ) {
@@ -481,6 +605,10 @@ public final class StreamPlayerController {
 
         eventTask?.cancel()
         eventTask = nil
+
+        audioInterruptionTask?.cancel()
+        audioInterruptionTask = nil
+        audioInterruptionSource.shutdown()
 
         await engine.shutdown()
 
