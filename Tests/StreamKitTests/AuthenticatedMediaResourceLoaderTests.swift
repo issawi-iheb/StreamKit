@@ -4,6 +4,160 @@ import Testing
 
 @Suite("Authenticated HLS resource loading")
 struct AuthenticatedMediaResourceLoaderTests {
+    @Test("Builds finite and open-ended byte ranges from AVFoundation request details")
+    func buildsByteRanges() throws {
+        let finiteRange = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 10,
+            currentOffset: 14,
+            requestedLength: 12,
+            requestsAllDataToEndOfResource: false
+        )
+        let openEndedRange = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 10,
+            currentOffset: 10,
+            requestedLength: 0,
+            requestsAllDataToEndOfResource: true
+        )
+        let fullResourceRequest = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 0,
+            currentOffset: 0,
+            requestedLength: 0,
+            requestsAllDataToEndOfResource: true
+        )
+
+        #expect(finiteRange?.headerValue == "bytes=14-25")
+        #expect(openEndedRange?.headerValue == "bytes=10-")
+        #expect(fullResourceRequest == nil)
+    }
+
+    @Test("Rejects finite byte-range arithmetic overflow")
+    func rejectsByteRangeOverflow() {
+        #expect(throws: PlaybackFailure.self) {
+            _ = try AuthenticatedMediaByteRange.make(
+                requestedOffset: Int64.max,
+                currentOffset: Int64.max,
+                requestedLength: 2,
+                requestsAllDataToEndOfResource: false
+            )
+        }
+    }
+
+    @Test("Rejects a server that ignores a finite range beginning at byte zero")
+    func rejectsIgnoredZeroOffsetRange() throws {
+        let range = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 0,
+            currentOffset: 0,
+            requestedLength: 10,
+            requestsAllDataToEndOfResource: false
+        )!
+        let response = httpResponse(statusCode: 200)
+
+        #expect(throws: PlaybackFailure.self) {
+            try range.validate(response: response)
+        }
+    }
+
+    @Test("Rejects a partial response with the wrong Content-Range start")
+    func rejectsMisalignedContentRange() throws {
+        let range = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 10,
+            currentOffset: 10,
+            requestedLength: 10,
+            requestsAllDataToEndOfResource: false
+        )!
+        let response = httpResponse(
+            statusCode: 206,
+            headers: ["Content-Range": "bytes 9-18/100"]
+        )
+
+        #expect(throws: PlaybackFailure.self) {
+            try range.validate(response: response)
+        }
+    }
+
+    @Test("Accepts an exact finite response and caps it to its declared range")
+    func acceptsExactFiniteRange() throws {
+        let range = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 10,
+            currentOffset: 10,
+            requestedLength: 10,
+            requestsAllDataToEndOfResource: false
+        )!
+        let response = httpResponse(
+            statusCode: 206,
+            headers: ["Content-Range": "bytes 10-19/100"]
+        )
+
+        let validated = try range.validate(response: response)
+
+        #expect(validated.bodyLength == 10)
+        #expect(validated.remainingBytes(after: 7) == 3)
+        #expect(validated.remainingBytes(after: 10) == 0)
+    }
+
+    @Test("Accepts a short finite response only when Content-Range proves end of resource")
+    func acceptsShortRangeOnlyAtEndOfResource() throws {
+        let range = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 90,
+            currentOffset: 90,
+            requestedLength: 20,
+            requestsAllDataToEndOfResource: false
+        )!
+        let response = httpResponse(
+            statusCode: 206,
+            headers: ["Content-Range": "bytes 90-99/100"]
+        )
+
+        #expect(try range.validate(response: response).bodyLength == 10)
+    }
+
+    @Test("Rejects a short finite response before the resource end")
+    func rejectsPrematureShortRange() throws {
+        let range = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 10,
+            currentOffset: 10,
+            requestedLength: 10,
+            requestsAllDataToEndOfResource: false
+        )!
+        let response = httpResponse(
+            statusCode: 206,
+            headers: ["Content-Range": "bytes 10-14/100"]
+        )
+
+        #expect(throws: PlaybackFailure.self) {
+            try range.validate(response: response)
+        }
+    }
+
+    @Test("Uses open-ended ranges for requests from a nonzero offset through EOF")
+    func validatesOpenEndedRange() throws {
+        let range = try AuthenticatedMediaByteRange.make(
+            requestedOffset: 100,
+            currentOffset: 100,
+            requestedLength: 0,
+            requestsAllDataToEndOfResource: true
+        )!
+        let response = httpResponse(
+            statusCode: 206,
+            headers: ["Content-Range": "bytes 100-199/200"]
+        )
+
+        #expect(range.headerValue == "bytes=100-")
+        #expect(try range.validate(response: response).bodyLength == 100)
+    }
+
+    @Test("Requires a full HTTP response when no range was requested")
+    func rejectsPartialResponseWithoutRange() throws {
+        let response = httpResponse(
+            statusCode: 206,
+            headers: ["Content-Range": "bytes 0-9/100"]
+        )
+
+        #expect(throws: PlaybackFailure.self) {
+            try AuthenticatedMediaByteRange.validateFullResponse(response)
+        }
+    }
+
     @Test("Authenticated requests do not use shared cookie storage")
     func authenticatedSessionDoesNotUseSharedCookies() {
         let configuration = AuthenticatedMediaResourceLoader.makeSessionConfiguration()
@@ -148,6 +302,18 @@ struct AuthenticatedMediaResourceLoaderTests {
         #expect(throws: PlaybackFailure.self) {
             try HLSPlaylistRewriter.rewrite(Data(playlist.utf8), playlistURL: baseURL)
         }
+    }
+
+    private func httpResponse(
+        statusCode: Int,
+        headers: [String: String] = [:]
+    ) -> HTTPURLResponse {
+        HTTPURLResponse(
+            url: URL(string: "https://media.example.com/video.ts")!,
+            statusCode: statusCode,
+            httpVersion: "HTTP/1.1",
+            headerFields: headers
+        )!
     }
 }
 

@@ -114,6 +114,7 @@ try await controller.play()
 ```
 - Throws if no media is loaded or playback fails
 - If media is loading, sets intent to play (playback starts when ready)
+- If the current item has ended and has a known finite duration, seeks to the start and resumes after the seek completes. Unknown-duration media is not rewound automatically.
 
 ### Pause
 ```swift
@@ -208,7 +209,7 @@ The token provider is called for media requests, not just the initial playlist. 
 
 Authenticated loading uses an isolated URL session. It does not read cookies from the app's shared URL session store; pass any required cookies explicitly with `MediaRequestConfiguration` so StreamKit can apply their domain and path scope.
 
-Bearer mode uses an AVFoundation resource loader and rewrites HLS resource URLs. Validate it with your CDN, redirects, byte-range behavior, token refresh policy, and supported HLS features before shipping. Cookies and user-agent configuration remain available for services that use those mechanisms instead.
+Bearer mode uses an AVFoundation resource loader and rewrites HLS resource URLs. Finite and open-ended byte-range responses are validated against `Content-Range`, and body bytes are bounded to the returned range. Validate it with your CDN, redirects, byte-range behavior, token refresh policy, and supported HLS features before shipping. Cookies and user-agent configuration remain available for services that use those mechanisms instead.
 
 ## FairPlay Streaming
 
@@ -260,4 +261,4 @@ The demo's separate **Protected Playback** section is prefilled with a public Mu
 
 ## Continuous Integration
 
-GitHub Actions runs the Swift package tests and builds the demo plus UI test bundle with the Xcode 27 runner. The hosted Xcode 27 image is currently a public preview. CI run 38916346546 succeeded. UI tests are compiled in CI; they still require a simulator runtime to execute.
+GitHub Actions runs the Swift package tests and the demo unit/UI tests on an iOS Simulator using the Xcode 27 runner. The hosted Xcode 27 image is currently a public preview. The workflow change has been validated locally on iPhone 17 Pro / iOS 26.5 Simulator; a hosted run of that change is still pending.

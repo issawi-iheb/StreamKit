@@ -233,6 +233,10 @@ public final class StreamPlayerController {
             audioInterruptionRequiresExplicitPlay = false
         }
 
+        let shouldRestartEndedItem = snapshot.phase == .ended
+            && snapshot.duration.map { $0.isFinite && $0 >= 0 } == true
+        let generation = loadGeneration
+
         switch snapshot.phase {
         case .idle:
             throw PlaybackFailure(
@@ -270,6 +274,20 @@ public final class StreamPlayerController {
         }
 
         do {
+            if shouldRestartEndedItem {
+                try await engine.seek(to: 0)
+
+                guard !isShutdown else {
+                    throw shutdownFailure()
+                }
+                guard loadGeneration == generation else {
+                    throw CancellationError()
+                }
+                guard snapshot.intent == .play else {
+                    return
+                }
+            }
+
             try await engine.play()
 
             guard !isShutdown else {

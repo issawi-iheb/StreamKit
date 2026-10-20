@@ -44,6 +44,7 @@ struct AudioSessionDemoView: View {
                     .foregroundStyle(.secondary)
 
                 LabeledContent("Playback phase", value: String(describing: snapshot.phase))
+                    .accessibilityIdentifier("audio-session-playback-phase")
                 LabeledContent("Playback intent", value: String(describing: snapshot.intent))
 
                 GroupBox("Simulated interruption checks") {
@@ -100,6 +101,7 @@ struct AudioSessionDemoView: View {
                 try session.setCategory(.playback, mode: .moviePlayback)
                 try await activate(session)
 
+                trackState.prepareForNewSource()
                 let handle = controller.load(MediaSource(url: sourceURL))
                 try await handle.waitUntilReady()
                 try await controller.play()

@@ -4,7 +4,7 @@
 
 This living report tracks StreamKit's production-readiness review against Phase 1 of the roadmap. The original findings below reflect earlier revisions; the later follow-up is authoritative when statuses or verification counts differ.
 
-**Current status (2026-10-20, revision `7a470c2`):** StreamKit has a sound playback foundation. The current revision passes 99 Swift tests across 11 suites. A generic iOS Simulator build previously compiled the demo and UI test bundle, but was not rerun after `7a470c2`; the UI tests have not been executed because CoreSimulator services were unavailable. The user confirmed basic demo playback, Siri interruption/resume on an iPhone running iOS 26.5, and successful Axinom public FairPlay playback: the license service returned HTTP 200, AVFoundation accepted the key response, and playback reached `.playing`. This verifies the demo's public test integration, not a production provider or the user's own protected origin. New mock-provider tests cover simulated rejection/network errors, empty CKC, redaction, and cancellation while waiting on the provider. They do not test HTTP parsing, AVFoundation key challenges, or real renewal. Hosted CI run [38916346546](https://github.com/issawi-iheb/StreamKit/actions/runs/38916346546) succeeded on an earlier revision and does not cover `7a470c2`. The package is **not yet production-ready**: real renewal and entitlement rejection require provider-issued materials that are not currently available. Cancellation, source replacement, other audio-session scenarios, and broader origin/device coverage also remain open.
+**Current status (2026-10-20, working tree based on `658ce93`):** StreamKit now passes **111 Swift package tests in 11 suites** and **6 demo unit/UI tests** on iPhone 17 Pro / iOS 26.5 Simulator. The current changes address authenticated byte-range validation, stale demo track state after source replacement, replay for ended media with known finite duration, and brittle UI-test selectors. GitHub Actions is configured to execute the simulator tests; a hosted run of this updated workflow is still pending. These checks do not verify a protected media origin on device, real FairPlay renewal/rejection, iOS 16 compatibility, or all audio-session/device behaviors. The user previously confirmed basic demo playback, Siri interruption/resume, and Axinom public FairPlay playback; that remains validation of those specific flows. StreamKit is **not yet production-ready**: protected-origin/device checks, FairPlay lifecycle coverage, platform-floor validation, and presentation features remain open.
 
 ## Original Audit Scope and Limitations (Historical Snapshot)
 
@@ -579,3 +579,21 @@ The following findings were written before the latest FairPlay and device verifi
 4. Perform physical-device interruption, background, route-change, and lifecycle profiling.
 5. Validate bearer HLS against a controlled protected origin and refine error mapping from real AVFoundation failures.
 6. Close remaining Phase 1 acceptance criteria before starting FairPlay (Phase 2).
+
+## Follow-up — 2026-10-20: Independent Audit Findings Resolved
+
+Three independent reviewers audited the full Swift package, demo, tests, and CI configuration at `658ce93`; I cross-checked the findings and ran the tests after implementing the fixes.
+
+- **AUTH-RANGE — Resolved and unit-tested.** Finite ranges require `206` and a valid matching `Content-Range`; open-ended requests from nonzero offsets now send `bytes=start-`. The loader bounds delivered bytes, verifies that the response body matches its declared range, and does not mistake an unknown `206` resource length for the entire resource length. Tests cover ignored ranges at offset zero, wrong starts, premature short responses, valid EOF-short responses, open-ended requests, and arithmetic overflow. A controlled protected HLS origin is still needed for device validation.
+- **DEMO-TRACKS — Resolved and sample-unit-tested.** Track state resets on source replacement and uses source revisions so cancelled or late track discovery cannot repopulate the previous source's menus.
+- **PLAY-REPLAY — Resolved for finite media and controller-unit-tested.** Play after `.ended` seeks to zero before resuming when duration is known and finite. The controller checks source generation and intent after the asynchronous seek; unknown-duration items are not implicitly rewound.
+- **UI-SELECTORS / CI — Resolved locally.** Navigation links and the audio-session status row expose stable accessibility identifiers. CI now runs `xcodebuild test` on an iOS Simulator instead of only building the UI-test bundle. The first local run exposed one additional composite-label assertion, which was fixed. Final simulator result: **6 passed, 0 failed** on iPhone 17 Pro / iOS 26.5. A hosted Actions run is still pending.
+- **FAIRPLAY-LIFECYCLE — Still a coverage gap, not a confirmed defect.** The real `AVContentKeySession` adapter's initial/renewal callbacks and teardown races do not have direct tests. Add an injectable AVFoundation boundary before claiming those lifecycle cases are covered. Real provider renewal/rejection still needs provider-issued materials.
+- **EVENT-BUFFERING — Low-priority hardening remains.** Engine time updates share an unbounded event stream with state events. If consumer load is sustained, consider coalescing time updates without dropping terminal/failure transitions.
+
+### Verification for this follow-up
+
+- `swift test`: **111 tests passed in 11 suites** on macOS arm64.
+- `xcodebuild test`: **6 demo unit/UI tests passed** on iPhone 17 Pro / iOS 26.5 Simulator.
+- `git diff --check`: clean at the time of review; rerun after documentation edits before commit.
+- No physical-device playback or controlled protected-origin test was part of this run.

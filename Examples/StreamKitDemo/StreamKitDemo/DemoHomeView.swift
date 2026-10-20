@@ -21,6 +21,7 @@ struct DemoHomeView: View {
                             symbol: "waveform"
                         )
                     }
+                    .accessibilityIdentifier("demo.audio-session")
 
                     NavigationLink {
                         StandalonePlayerDemoView()
@@ -63,6 +64,7 @@ struct DemoHomeView: View {
                             symbol: "lock.shield"
                         )
                     }
+                    .accessibilityIdentifier("demo.bearer-authenticated-hls")
 
                     NavigationLink {
                         FairPlayIntegrationDemoView()
@@ -73,6 +75,7 @@ struct DemoHomeView: View {
                             symbol: "key.horizontal"
                         )
                     }
+                    .accessibilityIdentifier("demo.axinom-fairplay")
                 }
 
                 Section("SDK") {

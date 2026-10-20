@@ -19,13 +19,13 @@ jobs:
       - name: Run Swift package tests
         run: swift test
 
-      - name: Build demo and UI test bundle
+      - name: Run demo unit and UI tests
         run: >-
           xcodebuild -quiet
           -project Examples/StreamKitDemo/StreamKitDemo.xcodeproj
           -scheme StreamKitDemo
-          -destination 'generic/platform=iOS Simulator'
+          -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
           -configuration Debug
           -derivedDataPath /tmp/StreamKitDerivedData
           CODE_SIGNING_ALLOWED=NO
-          build-for-testing
+          test

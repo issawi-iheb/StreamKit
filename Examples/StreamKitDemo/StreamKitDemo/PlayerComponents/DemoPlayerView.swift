@@ -77,7 +77,7 @@ struct DemoPlayerView: View {
 
             seekPosition = min(snapshot.currentTime, newDuration)
         }
-        .task(id: canAccessTracks) {
+        .task(id: canAccessTracks ? trackState.sourceRevision : nil) {
             guard canAccessTracks else {
                 return
             }

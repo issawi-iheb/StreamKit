@@ -86,6 +86,95 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("Play after finite media ends seeks to the beginning before resuming")
+    func playAfterEndRestartsFiniteMedia() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.mp4")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        engine.emit(.timeUpdated(currentTime: 30, duration: 30), fromLoad: 1)
+        engine.emit(.ended, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.ended, controller: controller)
+
+        let playTask = Task { try await controller.play() }
+        await engine.waitForSeek(id: 1)
+
+        #expect(engine.seekTimes == [0])
+        #expect(engine.playCallCount == 0)
+
+        engine.completeSeek(id: 1)
+        try await playTask.value
+
+        #expect(engine.playCallCount == 1)
+        #expect(controller.snapshot.intent == .play)
+        await controller.shutdown()
+    }
+
+    @Test("A pause during replay seek prevents playback from starting")
+    func pauseDuringReplaySeekCancelsRestart() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.mp4")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        engine.emit(.timeUpdated(currentTime: 30, duration: 30), fromLoad: 1)
+        engine.emit(.ended, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.ended, controller: controller)
+
+        let playTask = Task { try await controller.play() }
+        await engine.waitForSeek(id: 1)
+        await controller.pause()
+        engine.completeSeek(id: 1)
+        try await playTask.value
+
+        #expect(engine.playCallCount == 0)
+        #expect(controller.snapshot.intent == .pause)
+        await controller.shutdown()
+    }
+
+    @Test("Play after an ended item with unknown duration does not seek")
+    func playAfterUnknownDurationEndDoesNotSeek() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let handle = controller.load(
+            MediaSource(url: URL(string: "https://example.com/live.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await handle.waitUntilReady()
+
+        engine.emit(.timeUpdated(currentTime: 30, duration: nil), fromLoad: 1)
+        engine.emit(.ended, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.ended, controller: controller)
+
+        try await controller.play()
+
+        #expect(engine.seekTimes.isEmpty)
+        #expect(engine.playCallCount == 1)
+        await controller.shutdown()
+    }
+
     @Test("Autoplay waits for AVFoundation state before reporting playback")
     func autoplayWaitsForObservedPlaybackState() async throws {
         let engine = MockPlaybackEngine()

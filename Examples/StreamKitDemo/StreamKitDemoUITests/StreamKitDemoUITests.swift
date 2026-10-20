@@ -38,7 +38,7 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["Bearer-Authenticated HLS"].tap()
+        app.buttons["demo.bearer-authenticated-hls"].tap()
 
         XCTAssertTrue(app.textFields["HTTPS media URL"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.textFields["Trusted media hosts"].exists)
@@ -51,10 +51,14 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["Audio Session & Background Playback"].tap()
+        app.buttons["demo.audio-session"].tap()
 
         XCTAssertTrue(app.staticTexts["Audio session and interruption handling"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Playback phase"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "audio-session-playback-phase")
+                .firstMatch.exists
+        )
     }
 
     @MainActor
@@ -62,7 +66,7 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["Axinom FairPlay Test"].tap()
+        app.buttons["demo.axinom-fairplay"].tap()
 
         XCTAssertTrue(app.textFields["Protected HLS manifest URL"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.textFields["FairPlay certificate URL"].exists)

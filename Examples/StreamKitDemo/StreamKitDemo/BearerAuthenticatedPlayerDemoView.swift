@@ -140,6 +140,7 @@ struct BearerAuthenticatedPlayerDemoView: View {
                 )
             )
         }
+        trackState.prepareForNewSource()
         let handle = controller.load(source)
 
         Task {

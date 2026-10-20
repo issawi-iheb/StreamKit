@@ -89,6 +89,7 @@ struct StandalonePlayerDemoView: View {
                 return
             }
 
+            trackState.prepareForNewSource()
             let handle = controller.load(MediaSource(url: url))
 
             do {

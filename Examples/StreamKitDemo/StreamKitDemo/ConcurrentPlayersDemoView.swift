@@ -168,6 +168,7 @@ struct ConcurrentPlayersDemoView: View {
     }
 
     private func loadFirstPlayer() async {
+        firstTrackState.prepareForNewSource()
         await load(
             firstURL,
             using: firstController,
@@ -176,6 +177,7 @@ struct ConcurrentPlayersDemoView: View {
     }
 
     private func loadSecondPlayer() async {
+        secondTrackState.prepareForNewSource()
         await load(
             secondURL,
             using: secondController,

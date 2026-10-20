@@ -205,6 +205,7 @@ struct FairPlayIntegrationDemoView: View {
                 )
             )
         )
+        trackState.prepareForNewSource()
         let handle = controller.load(source)
 
         Task {

@@ -4,9 +4,10 @@
 > Test Coverage” list below describe an earlier review snapshot. Several items
 > have since been covered or mitigated. See the [current production readiness
 > audit](../../PRODUCTION_READINESS_AUDIT.md) for overall status and the
-> [roadmap](../../ROADMAP.md) for next steps. Revision `7a470c2` passes 99
-> package tests in 11 suites; this does not establish device-level lifecycle
-> behavior.
+> [roadmap](../../ROADMAP.md) for next steps. The current working tree based
+> on `658ce93` passes 111 package tests in 11 suites and all 6 demo unit/UI tests
+> on iPhone 17 Pro / iOS 26.5 Simulator. This does not establish protected-origin
+> playback or device-only lifecycle behavior.
 
 This report analyzes the StreamKit playback lifecycle and resource management for potential issues before adding FairPlay DRM, advertising, or Picture in Picture.
 
@@ -330,3 +331,16 @@ these statuses supersede its blanket “missing” labels.
 - FairPlay renewal and real entitlement rejection need provider materials.
   Mock-provider error/cancellation tests do not emulate AVFoundation's real
   FairPlay challenge.
+
+## Current Sample Follow-up — 2026-10-20
+
+- Track menus clear and reload when a source changes. A source-revision guard
+  prevents a cancelled or late lookup from restoring tracks from the previous
+  source.
+- The sample's bearer, FairPlay, and audio-session navigation targets now use
+  stable accessibility identifiers. UI tests no longer depend on the composed
+  title-plus-subtitle VoiceOver label.
+- The audio-session playback-phase row also has a stable identifier so the UI
+  test can locate it regardless of how SwiftUI composes its label and value.
+- The updated CI workflow executes the demo and UI tests on an iOS Simulator.
+  Local simulator verification passes; a hosted run remains pending.

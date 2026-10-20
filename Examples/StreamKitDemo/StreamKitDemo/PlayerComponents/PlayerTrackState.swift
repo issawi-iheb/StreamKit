@@ -20,7 +20,30 @@ final class PlayerTrackState {
     private(set) var isLoading = false
     var errorMessage: String?
 
-    private var hasLoadedTracks = false
+    private(set) var hasLoadedTracks = false
+    private(set) var sourceRevision = UUID()
+
+    func prepareForNewSource() {
+        sourceRevision = UUID()
+        audioTracks = []
+        subtitleTracks = []
+        selectedAudioID = nil
+        selectedSubtitleID = nil
+        hasLoadedTracks = false
+        isLoading = false
+        errorMessage = nil
+    }
+
+    func applyTracks(
+        audio: [MediaTrack],
+        subtitles: [MediaTrack],
+        for revision: UUID
+    ) {
+        guard revision == sourceRevision else { return }
+        audioTracks = audio
+        subtitleTracks = subtitles
+        hasLoadedTracks = true
+    }
 
     var hasAudioTracks: Bool {
         !audioTracks.isEmpty
@@ -51,11 +74,14 @@ final class PlayerTrackState {
             return
         }
 
+        let revision = sourceRevision
         isLoading = true
         errorMessage = nil
 
         defer {
-            isLoading = false
+            if sourceRevision == revision {
+                isLoading = false
+            }
         }
 
         do {
@@ -65,15 +91,21 @@ final class PlayerTrackState {
             let loadedAudio = try await audioResult
             let loadedSubtitles = try await subtitleResult
 
-            guard !Task.isCancelled else {
+            guard !Task.isCancelled,
+                  sourceRevision == revision
+            else {
                 return
             }
 
-            audioTracks = loadedAudio
-            subtitleTracks = loadedSubtitles
-            hasLoadedTracks = true
+            applyTracks(
+                audio: loadedAudio,
+                subtitles: loadedSubtitles,
+                for: revision
+            )
         } catch {
-            guard !Task.isCancelled else {
+            guard !Task.isCancelled,
+                  sourceRevision == revision
+            else {
                 return
             }
 
