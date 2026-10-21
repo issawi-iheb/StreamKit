@@ -12,29 +12,18 @@ import StreamKit
 
 @MainActor
 struct StandalonePlayerDemoView: View {
-    @State private var controller = StreamPlayerController()
-    @StateObject private var pictureInPictureController = StreamPictureInPictureController()
-
-    @State private var snapshot = PlaybackSnapshot(
-        phase: .idle,
-        intent: .pause
-    )
-
-    @State private var errorMessage: String?
+    @ObservedObject var session: StandalonePlayerDemoSession
     @State private var isFullscreen = false
-
-    // Shared between embedded and fullscreen player.
-    @State private var trackState = PlayerTrackState()
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     DemoPlayerView(
-                        controller: controller,
-                        pictureInPictureController: pictureInPictureController,
-                        snapshot: snapshot,
-                        trackState: trackState,
+                        controller: session.playerController,
+                        pictureInPictureController: session.pictureInPictureController,
+                        snapshot: session.snapshot,
+                        trackState: session.trackState,
                         isFullscreen: false,
                         onFullscreen: {
                             isFullscreen = true
@@ -52,7 +41,7 @@ struct StandalonePlayerDemoView: View {
                     }
                     .padding(.horizontal, 16)
 
-                    if let errorMessage {
+                    if let errorMessage = session.errorMessage {
                         Label(
                             errorMessage,
                             systemImage: "exclamationmark.triangle.fill"
@@ -71,10 +60,10 @@ struct StandalonePlayerDemoView: View {
         }
         .fullScreenCover(isPresented: $isFullscreen) {
             DemoPlayerView(
-                controller: controller,
-                pictureInPictureController: pictureInPictureController,
-                snapshot: snapshot,
-                trackState: trackState,
+                controller: session.playerController,
+                pictureInPictureController: session.pictureInPictureController,
+                snapshot: session.snapshot,
+                trackState: session.trackState,
                 isFullscreen: true,
                 onFullscreen: {
                     isFullscreen = false
@@ -84,51 +73,13 @@ struct StandalonePlayerDemoView: View {
             .background(.black)
             .ignoresSafeArea()
         }
-        .task {
-            do {
-                try await DemoPlaybackAudioSession.configureAndActivate()
-
-                guard !Task.isCancelled else { return }
-
-                guard let url = URL(
-                    string: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
-                ) else {
-                    errorMessage = "Invalid media URL."
-                    return
-                }
-
-                trackState.prepareForNewSource()
-
-                let handle = controller.load(MediaSource(url: url))
-                try await handle.waitUntilReady()
-
-                guard !Task.isCancelled else { return }
-
-                try await controller.play()
-            } catch {
-                guard !Task.isCancelled else { return }
-                errorMessage = error.localizedDescription
+        .onAppear {
+            session.playerRouteDidAppear()
+        }
+        .onDisappear {
+            if !isFullscreen {
+                session.playerRouteDidDisappear()
             }
         }
-        .task {
-            for await newSnapshot in controller.snapshots {
-                snapshot = newSnapshot
-            }
-        }
-//        .task {
-//            await withTaskCancellationHandler {
-//                while !Task.isCancelled {
-//                    do {
-//                        try await Task.sleep(for: .seconds(3_600))
-//                    } catch {
-//                        break
-//                    }
-//                }
-//            } onCancel: {
-//                Task { @MainActor in
-//                    await controller.shutdown()
-//                }
-//            }
-//        }
     }
 }

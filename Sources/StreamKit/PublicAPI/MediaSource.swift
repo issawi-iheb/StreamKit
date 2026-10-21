@@ -110,6 +110,7 @@ public struct MediaBearerAuthentication: Sendable, Equatable {
         }
         do {
             let token = try await tokenProvider(url)
+            try Task.checkCancellation()
             guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw PlaybackFailure(
                     code: .authentication,
@@ -117,6 +118,8 @@ public struct MediaBearerAuthentication: Sendable, Equatable {
                 )
             }
             return token
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let failure as PlaybackFailure {
             throw failure
         } catch {

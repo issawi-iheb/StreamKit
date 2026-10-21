@@ -136,6 +136,24 @@ struct MediaSourceTests {
         #expect(try await authentication.authorizationHeader(for: untrustedURL) == nil)
         #expect(try await authentication.authorizationHeader(for: insecureURL) == nil)
     }
+
+    @Test("Bearer token cancellation is preserved")
+    func bearerTokenCancellationIsPreserved() async {
+        let authentication = MediaBearerAuthentication(trustedHosts: ["media.example.com"]) { _ in
+            throw CancellationError()
+        }
+
+        do {
+            _ = try await authentication.authorizationHeader(
+                for: URL(string: "https://media.example.com/master.m3u8")!
+            )
+            Issue.record("Expected token-provider cancellation to propagate.")
+        } catch is CancellationError {
+            // Expected: cancellation must not be presented as an auth failure.
+        } catch {
+            Issue.record("Expected CancellationError, got \(error).")
+        }
+    }
 }
 
 private struct TestFairPlayLicenseProvider: FairPlayLicenseProvider {

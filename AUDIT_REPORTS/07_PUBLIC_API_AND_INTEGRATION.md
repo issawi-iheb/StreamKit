@@ -1,5 +1,11 @@
 # Public API and integration
 
+## Implementation follow-up — 2026-10-21
+
+README integration guidance now shows snapshot consumption in a `@MainActor` task and explicitly says that `AsyncStream` does not isolate its consumer. It also documents that removing `StreamVideoView` does not stop the controller, describes retaining the playback/PiP owners through PiP, and provides a host-owned audio-focus example. The example serializes app play requests at the owner boundary; StreamKit still does not provide shared multi-controller focus arbitration.
+
+The standalone demo now demonstrates route-scoped playback-session ownership through `StandalonePlayerDemoSession`, including retaining the controller and PiP controller above the route and performing shutdown after route exit and PiP stop. The new session is compiled but not directly unit-tested; device PiP lifecycle acceptance remains open.
+
 ## Consumer shape
 
 ```swift

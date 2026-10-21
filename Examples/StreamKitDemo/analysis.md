@@ -5,10 +5,12 @@
 > have since been covered or mitigated. See the [current production readiness
 > audit](../../PRODUCTION_READINESS_AUDIT.md) for overall status and the
 > [roadmap](../../ROADMAP.md) for next steps. The current working tree based
-> on `bce7c70` passes 111 package tests in 11 suites and 8 demo unit/UI tests
-> on iPhone 17 Pro / iOS 26.5 Simulator. The current working tree adds the
-> presentation feature described below; PiP and rotation still require device
-> validation.
+> Historical verification on `bce7c70` recorded 111 package tests and 8 demo
+> unit/UI tests on iPhone 17 Pro / iOS 26.5 Simulator. The 2026-10-21 follow-up
+> passes 115 package tests and 4 demo unit tests; its UI test attempt stalled
+> and was interrupted, so no current UI result is claimed. See the current
+> [production readiness audit](../../PRODUCTION_READINESS_AUDIT.md). PiP and
+> rotation still require device validation.
 
 This report analyzes the StreamKit playback lifecycle and resource management for potential issues before adding FairPlay DRM, advertising, or Picture in Picture.
 

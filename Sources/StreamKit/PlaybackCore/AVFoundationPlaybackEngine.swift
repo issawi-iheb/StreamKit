@@ -439,7 +439,8 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         for item: AVPlayerItem,
         generation: UInt64
     ) {
-        guard isCurrentItem(item, generation: generation) else {
+        guard isCurrentItem(item, generation: generation),
+              player.timeControlStatus == status else {
             return
         }
 
@@ -457,6 +458,9 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             emit(.waiting)
 
         case .paused:
+            // AVPlayer begins in `.paused` while a new item is still loading.
+            // Do not publish that transport state until readiness is known.
+            guard item.status == .readyToPlay else { return }
             emit(.paused)
 
         @unknown default:

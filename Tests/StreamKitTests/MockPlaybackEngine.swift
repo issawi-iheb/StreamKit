@@ -16,6 +16,8 @@ final class MockPlaybackEngine: PlaybackEngine {
     private(set) var playbackRate: Float = 1.0
     private(set) var playCallCount = 0
     private(set) var pauseCallCount = 0
+    private var shouldSuspendNextPlay = false
+    private var pendingPlay: CheckedContinuation<Void, Error>?
     private var registeredLoadIDs: Set<Int> = []
     private var loadRegistrationWaiters: [
         Int: [CheckedContinuation<Void, Never>]
@@ -149,10 +151,30 @@ final class MockPlaybackEngine: PlaybackEngine {
         continuation.resume()
     }
 
+    func suspendNextPlay() {
+        shouldSuspendNextPlay = true
+    }
+
+    func waitForPendingPlay() async {
+        for _ in 0..<100 where pendingPlay == nil {
+            await Task.yield()
+        }
+    }
+
+    func failPendingPlay(with error: Error) {
+        pendingPlay?.resume(throwing: error)
+        pendingPlay = nil
+    }
+
     // MARK: - PlaybackEngine
 
     func play() async throws {
         playCallCount += 1
+        guard shouldSuspendNextPlay else { return }
+        shouldSuspendNextPlay = false
+        try await withCheckedThrowingContinuation { continuation in
+            pendingPlay = continuation
+        }
         // Intentionally emit no event.
         // Tests must explicitly control when playback events occur.
     }
@@ -185,6 +207,9 @@ final class MockPlaybackEngine: PlaybackEngine {
     }
 
     func shutdown() async {
+        pendingPlay?.resume(throwing: CancellationError())
+        pendingPlay = nil
+
         for continuation in pendingLoads.values {
             continuation.resume(throwing: CancellationError())
         }

@@ -23,3 +23,7 @@ Pause updates intent before awaiting engine pause; a reentrant late event will b
 ## Exact proposed change
 
 PLAY-001: target `Sources/StreamKit/PlaybackCore/AVFoundationPlaybackEngine.swift:714-753` and `Sources/StreamKit/PublicAPI/StreamPlayerController.swift:377-411`. Add a `seekGeneration` counter incremented before each engine seek; after await require both item generation and seek token match. Return a seek result (or expose actual current time) so controller does not blindly write an obsolete requested value. If the engine protocol's `seek` return type changes, update `PlaybackEngine.swift` and `MockPlaybackEngine.swift`. Proposed pseudocode/diff and test are in `11_PATCH_PROPOSALS.md`; validate AVFoundation `completed` semantics before choosing whether superseded seeks throw `CancellationError` or return superseded status.
+
+## Implementation follow-up — 2026-10-21
+
+The AVFoundation time-control observer now rechecks that the player's status still matches the callback's captured status after its actor hop. It suppresses the initial `.paused` status until the current item is ready, and `StreamPlayerController` ignores `.paused` outside ready/playing/waiting/paused phases. This closes the observed loading-state regression; it does not change PLAY-001, because overlapping seek-operation identity remains unimplemented and requires a separate ordering decision.

@@ -4,7 +4,7 @@
 
 This living report tracks StreamKit's production-readiness review against Phase 1 of the roadmap. The original findings below reflect earlier revisions; the later follow-up is authoritative when statuses or verification counts differ.
 
-**Current status (2026-10-20, working tree based on `bce7c70`):** StreamKit passes **111 Swift package tests in 11 suites** and **8 demo unit/UI tests** on iPhone 17 Pro / iOS 26.5 Simulator. The demo tests cover AVKit/PiP screen navigation and custom fullscreen enter/exit. The package now provides an optional AVKit-backed view with a PiP restoration callback; the demo enables automatic landscape only while its custom fullscreen cover is visible and restores the prior orientation. These tests do not establish actual PiP operation, physical-device orientation transitions, or app restoration behavior. Protected-origin playback, real FairPlay renewal/rejection, iOS 16 compatibility, and other audio-session/device behaviors remain open. StreamKit is **not yet production-ready**.
+**Current status (2026-10-21, branch `codex/pip-support`):** The package passes **115 Swift package tests in 11 suites**. Generic iOS demo build and simulator `build-for-testing` pass, and **4 demo unit tests pass** on iPhone 17 Pro / iOS 26.5 Simulator. The UI test run stalled on Xcode debugger-version lookup warnings and was interrupted, so no UI result is claimed. The current implementation adds play/pause command-generation guards, filters initial AVPlayer paused state while loading, preserves bearer token-provider cancellation, and gives the standalone demo an explicit route/PiP playback-session owner. Physical-device PiP, actual restoration, iOS 16 compatibility, FairPlay lifecycle, protected-origin behavior, and other audio-session/device behaviors remain open. StreamKit is **not yet production-ready**.
 
 ## Original Audit Scope and Limitations (Historical Snapshot)
 
@@ -23,6 +23,8 @@ The audit covered the StreamKit SDK source code located in `/StreamKit/Sources/S
 - While Swift concurrency correctness was analyzed, formal verification of absence of data races was not performed
 
 ## Original Commands and Results (Historical Snapshot)
+
+The current follow-up validation is recorded in [AUDIT_REPORTS/08_TESTING_AND_VALIDATION_PLAN.md](AUDIT_REPORTS/08_TESTING_AND_VALIDATION_PLAN.md). The original results below remain historical and must not be used as the current test count.
 
 1. **Test Suite Execution**
    - Command: `cd /Users/iheb/Documents/StreamKit && swift test`

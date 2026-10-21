@@ -21,3 +21,16 @@ Severity definitions: **Critical** = immediate severe failure with broad exposur
 | API-001 | Integration | Medium | Enhancement | Lifecycle and stream/cancel contracts need one public integration guide | `StreamPlayerController.swift:25-33,106-110,613-641`; `LoadHandle.swift:10-25` | Consumer cleanup and cancellation assumptions vary | Document, compile external consumer sample | 07, 08 | CONC-001 |
 | API-002 | API | Low | Enhancement | Track ID persistence lifetime is not encoded in type | `Sources/StreamKit/PublicAPI/MediaTrack.swift:7-10` | Consumer can persist unstable string identifier | Document per-item scope | 07 | none |
 | TEST-001 | Validation | Medium | Confirmed limitation | Package tests could not be executed in sandbox | command log in 08 | No independent test result for current dirty tree | Re-run on writable host and record output | 00, 08 | environment |
+
+## Implementation status update — 2026-10-21
+
+| Finding / area | Updated status | Evidence and remaining limit |
+|---|---|---|
+| CONC-003 (new; controller command ordering) | Mitigated for snapshot/error state | `playbackCommandGeneration` rejects late play/pause completions after newer commands, source loads, or shutdown. Tests cover late failures. Physical engine effects are not globally serialized if a future backend suspends inside transport calls. |
+| Engine initial pause / loading transition | Fixed and unit-tested | Engine checks current AVPlayer status after actor hop and waits for item readiness before emitting initial `.paused`; controller phase guard is covered by `initialPausedEventDoesNotOverrideLoading`. |
+| Auth token-provider cancellation | Fixed and unit-tested | Cancellation is checked after provider return and remains `CancellationError`; `bearerTokenCancellationIsPreserved` covers it. |
+| API-001 lifecycle/integration documentation | Improved | README now documents actor context for snapshot consumers, view-vs-controller lifetime, PiP retention, and host audio focus. External consumer target and route/PiP device acceptance remain open. |
+| TEST-001 | Resolved for package suite on this checkout | 115 package tests pass; see exact platform results and limitations in `08_TESTING_AND_VALIDATION_PLAN.md`. |
+| Demo standalone playback session lifecycle | Implemented and build-verified | Root-retained session handles route and PiP ownership; no dedicated session unit test or physical-device PiP test yet. |
+
+Existing findings not listed above retain their prior status. In particular, overlapping seek ordering, shared `LoadHandle` cancellation semantics, live seekable ranges, protected-origin validation, FairPlay device lifecycle, actual PiP restoration, minimum-iOS verification, and CI hosted execution remain open.

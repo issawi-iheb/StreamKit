@@ -1,5 +1,11 @@
 # StreamKit production-readiness audit
 
+## Implementation follow-up — 2026-10-21
+
+The follow-up implementation added controller command-generation guards for stale play/pause completions, suppressed invalid initial AVPlayer paused events during loading, preserved cancellation from bearer token providers, and moved standalone demo controller/PiP ownership into a retained playback session. README and architecture guidance now explain snapshot actor context, route/PiP ownership, and host-side audio focus. These are targeted reliability and integration improvements; they do not close seek-ordering, real PiP, FairPlay lifecycle, or minimum-OS validation gaps.
+
+Latest checks on this checkout: **115 package tests pass**, generic iOS demo build and simulator `build-for-testing` pass, and **4 demo unit tests pass** on iPhone 17 Pro / iOS 26.5 Simulator. UI tests were attempted but produced no result because the run stalled on Xcode debugger-version lookup warnings and was interrupted. Physical-device PiP was not revalidated. StreamKit remains **not yet demonstrated production-ready**.
+
 ## Assessment
 
 **Overall: promising early SDK / not yet demonstrated production-ready.** The core has a clear per-controller ownership model, a typed intent/phase snapshot, generation-tagged engine events, isolated subscriber streams, and provider-neutral FairPlay integration. The authored tests cover many controller races and deterministic DRM/auth helpers. No source changes were made by this audit.

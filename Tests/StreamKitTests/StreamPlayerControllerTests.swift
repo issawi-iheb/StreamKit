@@ -86,6 +86,113 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("An initial paused event cannot replace the loading phase")
+    func initialPausedEventDoesNotOverrideLoading() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+
+        engine.emit(.paused, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        for _ in 0..<10 { await Task.yield() }
+
+        #expect(controller.snapshot.phase == .loading)
+
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+        #expect(controller.snapshot.phase == .ready)
+
+        await controller.shutdown()
+    }
+
+    @Test("A superseded play failure cannot replace the latest paused state")
+    func supersededPlayFailureDoesNotReplacePausedState() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        engine.suspendNextPlay()
+        let playTask = Task { try await controller.play() }
+        await engine.waitForPendingPlay()
+        #expect(engine.playCallCount == 1)
+
+        await controller.pause()
+        engine.failPendingPlay(
+            with: PlaybackFailure(code: .playback, message: "Late play failure")
+        )
+
+        var wasCancelled = false
+        do {
+            try await playTask.value
+        } catch is CancellationError {
+            wasCancelled = true
+        } catch {
+            Issue.record("Expected a superseded play request to cancel: \(error)")
+        }
+
+        #expect(wasCancelled)
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .pause)
+        await controller.shutdown()
+    }
+
+    @Test("A late play failure from a replaced source cannot fail the new source")
+    func latePlayFailureDoesNotFailReplacementSource() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let firstLoad = controller.load(
+            MediaSource(url: URL(string: "https://example.com/first.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await firstLoad.waitUntilReady()
+
+        engine.suspendNextPlay()
+        let playTask = Task { try await controller.play() }
+        await engine.waitForPendingPlay()
+
+        let replacementLoad = controller.load(
+            MediaSource(url: URL(string: "https://example.com/replacement.m3u8")!)
+        )
+        await engine.waitForLoad(id: 2)
+        engine.completeLoad(id: 2)
+        try await replacementLoad.waitUntilReady()
+
+        engine.failPendingPlay(
+            with: PlaybackFailure(code: .playback, message: "Late old-source failure")
+        )
+        var wasCancelled = false
+        do {
+            try await playTask.value
+        } catch is CancellationError {
+            wasCancelled = true
+        } catch {
+            Issue.record("Expected replaced play request to cancel: \(error)")
+        }
+
+        #expect(wasCancelled)
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .pause)
+        await controller.shutdown()
+    }
+
     @Test("Play after finite media ends seeks to the beginning before resuming")
     func playAfterEndRestartsFiniteMedia() async throws {
         let engine = MockPlaybackEngine()

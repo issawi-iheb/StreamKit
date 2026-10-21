@@ -40,3 +40,12 @@ Controller event stream tasks capture weak self and stop on stream finish. Shutd
 - `SnapshotBroadcasterTests.cancelledSubscriberIsRemoved`: cancel iterator/task, publish repeatedly, assert stream ends and no retained subscriber through a test-only count.
 
 No checked continuation double-resume was found in the inspected readiness and FairPlay completion paths: both remove/clear their pending identity before resume/finish. The SPC wrapper has one callback-controlled resume and checked continuation diagnostics would catch a violation, but exactly-once callback behavior remains an AVFoundation assumption to validate.
+
+## Implementation follow-up — 2026-10-21
+
+- Added `playbackCommandGeneration` to invalidate stale play/pause continuations across a newer play, pause, source load, or shutdown. Tests cover a late play failure after pause and after source replacement. The generation protects controller snapshot/error state; it does not serialize a hypothetical backend that suspends while its physical transport operation is still in flight. Custom asynchronous engines need an explicit serialization policy before supporting overlapping commands.
+- `MediaBearerAuthentication.token(for:)` now checks cancellation after the provider returns and preserves `CancellationError` instead of mapping cancellation to authentication failure. A regression test covers cancellation from the token provider.
+- The demo now keeps standalone playback and custom PiP ownership in a root-retained session until both the route and PiP have ended, then shuts down the controller. This is compiled, but there is no direct unit test of the demo session lifecycle and physical-device PiP remains unverified.
+- Initial AVPlayer `.paused` during item loading is filtered by readiness, and the controller rejects paused events that are illegal for its current phase. Regression coverage includes `initialPausedEventDoesNotOverrideLoading`.
+
+The shared `LoadHandle` cancellation contract and SPC callback continuation behavior remain open as described above.

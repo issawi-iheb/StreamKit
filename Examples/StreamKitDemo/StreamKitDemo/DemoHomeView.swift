@@ -10,6 +10,7 @@ import StreamKit
 
 struct DemoHomeView: View {
     @StateObject private var presentationSession = PresentationDemoSession()
+    @StateObject private var standalonePlayerSession = StandalonePlayerDemoSession()
 
     var body: some View {
         NavigationStack {
@@ -27,7 +28,7 @@ struct DemoHomeView: View {
                     .accessibilityIdentifier("demo.audio-session")
 
                     NavigationLink {
-                        StandalonePlayerDemoView()
+                        StandalonePlayerDemoView(session: standalonePlayerSession)
                     } label: {
                         DemoNavigationRow(
                             title: "Standalone Player",

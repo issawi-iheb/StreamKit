@@ -88,7 +88,7 @@ Observe playback state changes using the `snapshots` property, which provides an
 ```swift
 // Start observation (typically in init or viewDidLoad)
 let snapshotStream = controller.snapshots
-Task {
+Task { @MainActor in
     for await snapshot in snapshotStream {
         // Handle state transitions:
         // snapshot.phase: .idle, .loading, .ready, .playing, .paused, .waiting, .ended, .failed
@@ -104,7 +104,7 @@ Task {
 // or you can break from the loop/task as needed
 ```
 
-All snapshot delivery occurs on the MainActor due to the `@MainActor` annotation on `StreamPlayerController`.
+The controller publishes snapshots from the MainActor. `AsyncStream` does not isolate its consumer, so UI code should consume snapshots from a MainActor task (as shown above) or explicitly hop to the UI actor before updating view state.
 
 ## Playback Controls
 
@@ -258,6 +258,23 @@ StreamKit observes iOS audio-session interruptions for each controller. By defau
 
 Each live controller responds to process-wide interruptions independently. If an app has multiple controllers with play intent, each may resume when iOS allows it; the host app remains responsible for choosing which player owns audio until StreamKit defines a shared audio-focus policy.
 
+For a product that allows only one audible player, route user play actions through one app-owned coordinator and pause the other sessions first:
+
+```swift
+@MainActor
+func requestPlayback(
+    _ selected: StreamPlayerController,
+    among players: [StreamPlayerController]
+) async throws {
+    for player in players where player !== selected {
+        await player.pause()
+    }
+    try await selected.play()
+}
+```
+
+Serialize concurrent play requests at that owner boundary. This coordinates app-requested playback; it does not change StreamKit's per-controller interruption policy. If the app needs to resume only the focused player after an interruption, configure each controller with `automaticallyResumesAfterAudioInterruption: false` and let the host's audio-session owner choose which controller to resume.
+
 The demo uses asynchronous audio-session activation on iOS 27 and later. On earlier supported versions, it runs the legacy activation call away from the main thread. Its simulated interruption controls exercise StreamKit's response to begin/end events; real Siri, call, route, and background behavior still needs OS/device verification.
 
 ```swift
@@ -282,6 +299,10 @@ Each `load(_:)` call returns a `LoadHandle`:
 - Releases AVFoundation resources and ends observation streams
 - Safe to call multiple times
 - After shutdown, all methods will fail or return immediately
+
+Removing `StreamVideoView` does not stop or shut down its controller. Put the controller in a playback-session owner whose lifetime matches the product's playback policy. On a normal route exit, pause or shut down the session; while custom PiP is active, retain the player and PiP controllers above the route and shut them down after PiP stops. Do not call `shutdown()` from the renderer's teardown because a renderer may disappear during fullscreen presentation or PiP.
+
+The demo's standalone player follows this pattern: the root retains its session, the player route reports appearance and disappearance, and the session releases the controller after the route and custom PiP are both inactive. A new route creates a fresh controller after shutdown because shutdown is terminal.
 
 ## Bearer-Authenticated HLS
 
@@ -361,4 +382,4 @@ The demo's separate **Protected Playback** section is prefilled with a public Mu
 
 ## Continuous Integration
 
-GitHub Actions runs the Swift package tests and the demo unit/UI tests on an iOS Simulator using the Xcode 27 runner. The hosted Xcode 27 image is currently a public preview. The workflow change has been validated locally on iPhone 17 Pro / iOS 26.5 Simulator; a hosted run of that change is still pending.
+GitHub Actions is configured to run the Swift package tests and demo unit/UI tests on an iOS Simulator using the Xcode 27 runner. The hosted Xcode 27 image is currently a public preview, and a hosted run of the latest workflow state is pending. Latest local validation passed the package tests and four demo unit tests on iPhone 17 Pro / iOS 26.5; the UI test run stalled on Xcode debugger-version lookup warnings and was interrupted, so no latest UI test result is claimed.

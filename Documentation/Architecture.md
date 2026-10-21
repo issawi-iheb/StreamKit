@@ -88,7 +88,15 @@ The diagram shows ownership and data flow, not a deployment topology. FairPlay c
 - The demo presents bearer-authenticated playback as a separate example. It is prefilled with a public Mux HLS stream so ordinary playback can be checked without credentials; supplying a token enables the bearer-authenticated path for a protected origin. The public sample does not verify bearer authentication.
 - Autoplay keeps the snapshot at `.ready` with `.play` intent until AVFoundation reports `.playing` or `.waiting`, so observed phase reflects the engine instead of the play request.
 - Calling `play()` after `.ended` seeks to zero first when the source has a known finite duration. The controller validates the source generation and current play intent after the asynchronous seek, so a replacement or explicit pause cannot be overridden by the late seek completion. Unknown-duration items are not implicitly rewound.
+- Play/pause commands carry a controller command generation across asynchronous engine calls. A superseded play cannot publish a late failure over a newer pause or source load, and a stale pause completion cannot overwrite newer intent. This protects controller state; it is not a backend-wide command queue, so custom engines that suspend during transport commands must still define how overlapping physical side effects are serialized.
+- AVPlayer time-control observations are checked against the current observed status before publication. Initial `.paused` while an item is still loading is ignored, and the controller ignores `.paused` events that are invalid for its current phase.
+- Cancellation from `MediaBearerAuthentication`'s async token provider is preserved as task cancellation rather than being normalized into a generic authentication failure.
 - Demo track choices are cached per source revision. A source replacement clears selections and track lists; late track-discovery results from the previous revision are discarded.
+
+## Demo playback-session ownership
+- The standalone demo's `StandalonePlayerDemoSession` owns the controller, custom PiP controller, current snapshot, and track state above the player route. The route reports appearance/disappearance; the session pauses and performs terminal shutdown only after the route has disappeared and custom PiP is inactive.
+- The demo retains its session at the app's home/root view so SwiftUI route reconstruction does not destroy active playback ownership. Since `shutdown()` is terminal, entering the route after cleanup creates a fresh controller/session.
+- This is an example ownership policy, not an SDK requirement. A host app should place the session/coordinator at the scope matching its own background, navigation, and PiP policy.
 
 ## FairPlay key loading
 - The playback engine owns one `FairPlayContentKeySession` per FairPlay-enabled media item and attaches its `AVURLAsset` as the key recipient.

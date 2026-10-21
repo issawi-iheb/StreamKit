@@ -51,6 +51,8 @@ public final class StreamPlayerController {
 
     /// Identifies the current source-loading operation.
     private var loadGeneration: UInt64 = 0
+    /// Orders app playback commands across async engine calls.
+    private var playbackCommandGeneration: UInt64 = 0
 
     private var isShutdown = false
 
@@ -201,6 +203,7 @@ public final class StreamPlayerController {
 
     private func beginLoading() -> UInt64 {
         loadGeneration &+= 1
+        playbackCommandGeneration &+= 1
         let generation = loadGeneration
         audioInterruptionRequiresExplicitPlay = false
 
@@ -228,6 +231,9 @@ public final class StreamPlayerController {
         guard !isShutdown else {
             throw shutdownFailure()
         }
+
+        playbackCommandGeneration &+= 1
+        let commandGeneration = playbackCommandGeneration
 
         if !isAudioInterrupted {
             audioInterruptionRequiresExplicitPlay = false
@@ -283,6 +289,9 @@ public final class StreamPlayerController {
                 guard loadGeneration == generation else {
                     throw CancellationError()
                 }
+                guard playbackCommandGeneration == commandGeneration else {
+                    return
+                }
                 guard snapshot.intent == .play else {
                     return
                 }
@@ -293,9 +302,20 @@ public final class StreamPlayerController {
             guard !isShutdown else {
                 throw shutdownFailure()
             }
+            guard loadGeneration == generation else {
+                throw CancellationError()
+            }
+            guard playbackCommandGeneration == commandGeneration else {
+                return
+            }
         } catch {
             guard !isShutdown else {
                 throw shutdownFailure()
+            }
+
+            guard loadGeneration == generation,
+                  playbackCommandGeneration == commandGeneration else {
+                throw CancellationError()
             }
 
             if error is CancellationError {
@@ -324,11 +344,15 @@ public final class StreamPlayerController {
             return
         }
 
+        playbackCommandGeneration &+= 1
+        let commandGeneration = playbackCommandGeneration
+
         updateIntent(.pause)
 
         await engine.pause()
 
-        guard !isShutdown else {
+        guard !isShutdown,
+              playbackCommandGeneration == commandGeneration else {
             return
         }
 
@@ -562,6 +586,9 @@ public final class StreamPlayerController {
                 )
             )
         case .paused:
+            guard [.ready, .playing, .waiting, .paused].contains(snapshot.phase) else {
+                return
+            }
             updatePhase(.paused)
         }
     }
@@ -617,6 +644,7 @@ public final class StreamPlayerController {
 
         isShutdown = true
         loadGeneration &+= 1
+        playbackCommandGeneration &+= 1
 
         activeLoadTask?.cancel()
         activeLoadTask = nil

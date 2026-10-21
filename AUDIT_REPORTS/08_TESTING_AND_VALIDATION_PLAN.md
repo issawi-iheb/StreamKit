@@ -2,13 +2,24 @@
 
 ## Existing coverage inventory
 
-Swift Testing is used in `Tests/StreamKitTests` (9 test files; observed `@Test` counts total 111). Coverage includes snapshot/error/value types; broadcaster normal delivery; controller loading, stale completions, shutdown, playback intent/phase, interruption, track forwarding, rates and multiple instances; AVFoundation engine shutdown/insecure FairPlay/instance isolation; authenticated loader URL/range/token helpers; FairPlay key-exchange provider orchestration. Demo XCTest/UI tests exist. No PiP-specific test file, fullscreen test, external consumer integration target, or CI workflow was found.
+Swift Testing is used in `Tests/StreamKitTests`; the current package suite contains **115 passing tests in 11 suites**. Coverage includes snapshot/error/value types; broadcaster normal delivery; controller loading, stale completions, shutdown, playback intent/phase, interruption, track forwarding, rates, command supersession, and multiple instances; AVFoundation engine shutdown/insecure FairPlay/instance isolation; authenticated loader URL/range/token helpers; FairPlay key-exchange provider orchestration. Demo XCTest/UI tests and a GitHub Actions workflow exist. No dedicated PiP-specific test suite or external consumer integration target is present. The latest UI test attempt did not complete; see validation below.
 
 ## Validation attempted
 
-- `rtk swift test` — **not run to completion**. SwiftPM manifest compilation failed because sandbox denied writing `/Users/ihebI/.cache/clang/ModuleCache` (`Operation not permitted`).
-- `CLANG_MODULE_CACHE_PATH=/private/tmp/streamkit-clang-cache rtk swift test --scratch-path /private/tmp/streamkit-swift-build` — **not run to completion**. SwiftPM then failed during sandbox setup (`sandbox_apply: Operation not permitted`).
-- No `xcodebuild`, simulator, hardware, DRM endpoint, PiP, or performance run was performed. No test pass is claimed.
+### Latest implementation validation — 2026-10-21
+
+- `rtk swift test` — **passed: 115 tests in 11 suites** (macOS 14.0).
+- Generic iOS demo build with `xcodebuild ... -destination 'generic/platform=iOS' ... CODE_SIGNING_ALLOWED=NO -quiet build` — **passed**.
+- iOS Simulator `build-for-testing` for app, unit-test, and UI-test targets — **passed**.
+- iPhone 17 Pro / iOS 26.5 Simulator demo unit tests — **passed: 4 tests**.
+- Demo UI tests — **no result**. The run stalled on repeated Xcode debugger-version lookup warnings and was interrupted. Do not count this as a pass or failure.
+- Physical-device PiP and the reported standalone player video behavior — **not revalidated in this pass**.
+- iOS 16 minimum-deployment build — **not run**; it was explicitly excluded from this change set.
+
+These results supersede older local validation counts below only for the listed checks. Historical audit attempts remain as recorded.
+
+- Historical attempts on the earlier audited checkout: `rtk swift test` was blocked by a sandboxed Swift module-cache write; retrying with a scratch path failed during sandbox setup. Those attempts are superseded by the successful latest package run above.
+- The 2026-10-21 UI-test attempt stalled on Xcode debugger-version lookup warnings and was interrupted; do not interpret it as a test failure or pass.
 
 Run when host permissions permit:
 
