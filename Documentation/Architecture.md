@@ -57,13 +57,20 @@ flowchart LR
     Engine --> Snapshots[Playback snapshots]
     Controller --> Snapshots
     Controller -->|same AVPlayer output| CustomView[StreamVideoView and app-owned controls]
+    Host -->|retains for playback session| CustomPiP[StreamPictureInPictureController]
+    CustomPiP -->|owns PiP transition and source layer| CustomView
     Controller -->|same AVPlayer output| SystemView[Optional StreamAVPlayerView using AVPlayerViewController]
+    Host -->|retains for playback session| SystemPiP[StreamAVPlayerPresentationController]
+    SystemPiP -->|delegate and restoration lifecycle| SystemView
+    SystemPiP -->|restore route before completion| Host
     KeySession -. redacted key result .-> Diagnostics[Optional host diagnostics]
 ```
 
 The diagram shows ownership and data flow, not a deployment topology. FairPlay certificate retrieval, key-identifier mapping, license HTTP/authentication, and response-envelope parsing belong to the host provider. The demo's Axinom provider is sample-only. The Axinom public test vector has now played successfully in a live demo run; production-provider and lifecycle acceptance checks remain open.
 
-`StreamVideoView` renders a controller into an `AVPlayerLayer` for app-owned controls. A `StreamPictureInPictureController` coordinates PiP for those custom surfaces; share one instance across views rendering the same controller, and start PiP in response to a user action. `StreamAVPlayerView` is an alternative AVKit-backed surface that provides Apple's standard controls and system PiP/AirPlay affordances where supported. Its restoration handler lets the host restore a dismissed player route before AVKit completes restoration. Use one renderer at a time for a controller. The host owns process-wide audio-session configuration and the app's `audio` background mode. The demo's standalone custom-control fullscreen cover requests landscape while presented and restores the orientation active before entry; this is sample behavior, not a package-wide orientation policy.
+`StreamVideoView` renders a controller into an `AVPlayerLayer` for app-owned controls. A `StreamPictureInPictureController` coordinates PiP for those custom surfaces; share one instance across views rendering the same controller, and start PiP in response to a user action. It retains the source layer until AVKit reports stop or failed start. `stopAndWaitUntilStopped()` is the shutdown barrier: await it before shutting down or replacing the playback controller.
+
+`StreamAVPlayerView` is an alternative AVKit-backed surface that provides Apple's standard controls and system PiP/AirPlay affordances where supported. The host retains one `StreamAVPlayerPresentationController` outside the player route for the playback session. It retains the AVKit delegate and controller across source-view removal, requests route restoration, and releases the detached controller after PiP stops. The host restoration callback reports success only after the player interface is available. Use one renderer at a time for a controller. The host owns process-wide audio-session configuration and the app's `audio` background mode. The demo's standalone custom-control fullscreen cover requests landscape while presented and restores the orientation active before entry; this is sample behavior, not a package-wide orientation policy.
 
 ## Platform Boundary
 - **Platform-independent**: Intent, Phase, Snapshot, Failure enums

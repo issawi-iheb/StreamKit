@@ -5,6 +5,8 @@ import SwiftUI
 @MainActor
 struct PresentationDemoView: View {
 
+    let presentationController: StreamAVPlayerPresentationController
+
     @State private var controller = StreamPlayerController()
     @StateObject private var pictureInPictureController =
         StreamPictureInPictureController()
@@ -18,7 +20,6 @@ struct PresentationDemoView: View {
     @State private var usesSystemPlayer = true
     @State private var automaticallyStartsPictureInPicture = false
     @State private var isFullscreenPresented = false
-    @State private var didRestoreFromPictureInPicture = false
 
     private let sourceURL = URL(
         string: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
@@ -32,12 +33,10 @@ struct PresentationDemoView: View {
                     if usesSystemPlayer {
                         StreamAVPlayerView(
                             controller: controller,
+                            presentationController: presentationController,
                             automaticallyStartsPictureInPictureWhenLeavingApp:
                                 automaticallyStartsPictureInPicture
-                        ) { completion in
-                            didRestoreFromPictureInPicture = true
-                            completion(true)
-                        }
+                        )
                         .accessibilityIdentifier("presentation-system-player")
                     } else {
                         StreamVideoView(
@@ -151,15 +150,6 @@ struct PresentationDemoView: View {
                     ? "Yes"
                     : "No"
             )
-
-            if didRestoreFromPictureInPicture {
-                Label(
-                    "Returned from Picture in Picture",
-                    systemImage: "pip.exit"
-                )
-                .font(.footnote)
-                .accessibilityIdentifier("presentation-pip-restored")
-            }
 
             if let errorMessage {
                 Label(

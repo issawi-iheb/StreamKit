@@ -5,9 +5,10 @@
 > have since been covered or mitigated. See the [current production readiness
 > audit](../../PRODUCTION_READINESS_AUDIT.md) for overall status and the
 > [roadmap](../../ROADMAP.md) for next steps. The current working tree based
-> on `658ce93` passes 111 package tests in 11 suites and all 6 demo unit/UI tests
-> on iPhone 17 Pro / iOS 26.5 Simulator. This does not establish protected-origin
-> playback or device-only lifecycle behavior.
+> on `bce7c70` passes 111 package tests in 11 suites and 8 demo unit/UI tests
+> on iPhone 17 Pro / iOS 26.5 Simulator. The current working tree adds the
+> presentation feature described below; PiP and rotation still require device
+> validation.
 
 This report analyzes the StreamKit playback lifecycle and resource management for potential issues before adding FairPlay DRM, advertising, or Picture in Picture.
 
@@ -344,3 +345,18 @@ these statuses supersede its blanket “missing” labels.
   test can locate it regardless of how SwiftUI composes its label and value.
 - The updated CI workflow executes the demo and UI tests on an iOS Simulator.
   Local simulator verification passes; a hosted run remains pending.
+
+## Presentation Follow-up — 2026-10-20
+
+- Added `StreamAVPlayerView` as an optional AVKit-backed presentation surface.
+  It uses the same controller/player and delegates standard playback controls,
+  PiP, and AirPlay presentation to Apple's `AVPlayerViewController`.
+- Added a separate **Presentation** menu example. It activates the playback
+  audio session, exposes opt-in automatic PiP, and explains the host app's
+  background-audio responsibility.
+- Custom fullscreen requests landscape through the active scene and restores
+  the orientation that was active before entry.
+- Simulator UI coverage checks that the AVKit/PiP destination and its setting
+  are reachable, and that the custom fullscreen cover can open and close. PiP
+  activation/restoration and actual orientation transitions still require
+  physical-device verification.

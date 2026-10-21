@@ -156,21 +156,21 @@ Track selection requires media to be ready (not idle, loading, or failed).
 Use `StreamVideoView` when you want to build custom controls. For Apple's standard playback interface, including system Picture in Picture and AirPlay controls where supported, use `StreamAVPlayerView`:
 
 ```swift
+@StateObject private var presentationController =
+    StreamAVPlayerPresentationController { completion in
+        // Reopen the player route, then complete after it is available.
+        completion(true)
+    }
+
 StreamAVPlayerView(
     controller: controller,
+    presentationController: presentationController,
     automaticallyStartsPictureInPictureWhenLeavingApp: false
 )
 .frame(height: 240)
 ```
 
-If your app can dismiss the player screen while PiP remains active, supply a restoration handler that presents the appropriate screen before calling its completion with `true`:
-
-```swift
-StreamAVPlayerView(controller: controller) { completion in
-    // Restore the owning player screen here.
-    completion(true)
-}
-```
+Keep `StreamAVPlayerPresentationController` in a parent that outlives the player screen. Its restoration handler must reopen that screen before calling its completion with `true`; call the completion with `false` when restoration cannot be provided. The presentation controller retains AVKit's delegate and source view controller until the PiP stop lifecycle completes.
 
 Automatic PiP is opt-in and should only be enabled when the inline player is the primary content. PiP requires device support, a playback audio session, and the app's `audio` background mode. The host app owns those settings. The demo's **AVKit Player & Picture in Picture** entry lets you switch between `StreamAVPlayerView` and custom `StreamVideoView` rendering. Automatic PiP is available in the AVKit mode; custom controls can start PiP from a user action when the controller reports that PiP is possible. The standalone custom-control demo requests landscape while fullscreen is open, then restores the orientation that was active before fullscreen.
 
@@ -188,6 +188,12 @@ Button("Start PiP") {
     pipController.startPictureInPicture()
 }
 .disabled(!pipController.isPictureInPicturePossible)
+
+// Before shutting down or replacing the playback controller:
+Task {
+    await pipController.stopAndWaitUntilStopped()
+    await controller.shutdown()
+}
 ```
 
 `StreamAVPlayerView` and `StreamVideoView` are alternative renderers for one controller; do not display both at the same time.

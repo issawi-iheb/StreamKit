@@ -6,8 +6,13 @@
 //
 
 import SwiftUI
+import StreamKit
 
 struct DemoHomeView: View {
+    @State private var isPresentationPresented = false
+    @StateObject private var presentationController =
+        StreamAVPlayerPresentationController { completion in completion(true) }
+
     var body: some View {
         NavigationStack {
             List {
@@ -56,8 +61,8 @@ struct DemoHomeView: View {
                 }
 
                 Section("Presentation") {
-                    NavigationLink {
-                        PresentationDemoView()
+                    Button {
+                        isPresentationPresented = true
                     } label: {
                         DemoNavigationRow(
                             title: "AVKit Player & Picture in Picture",
@@ -105,6 +110,18 @@ struct DemoHomeView: View {
                 }
             }
             .navigationTitle("StreamKit")
+            .navigationDestination(isPresented: $isPresentationPresented) {
+                PresentationDemoView(presentationController: presentationController)
+            }
+            .onAppear {
+                presentationController.restorationHandler = { completion in
+                    isPresentationPresented = true
+                    Task { @MainActor in
+                        await Task.yield()
+                        completion(true)
+                    }
+                }
+            }
         }
     }
 }

@@ -10,6 +10,7 @@
 import SwiftUI
 import AVFoundation
 import AVKit
+import Combine
 
 /// Displays video from a StreamPlayerController.
 ///
@@ -48,8 +49,8 @@ private struct StreamPlayerLayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerLayerUIView {
         let view = PlayerLayerUIView()
-        view.player = controller.renderingPlayer
         view.pictureInPictureController = pictureInPictureController
+        view.updatePlayer(controller.renderingPlayer)
         return view
     }
 
@@ -57,8 +58,8 @@ private struct StreamPlayerLayerView: UIViewRepresentable {
         _ uiView: PlayerLayerUIView,
         context: Context
     ) {
-        uiView.player = controller.renderingPlayer
         uiView.pictureInPictureController = pictureInPictureController
+        uiView.updatePlayer(controller.renderingPlayer)
     }
 
     static func dismantleUIView(
@@ -82,6 +83,10 @@ private final class PlayerLayerUIView: UIView {
         layer as! AVPlayerLayer
     }
 
+    private var pendingPlayer: AVPlayer?
+    private var hasPendingPlayer = false
+    private var pictureInPictureStateObservation: AnyCancellable?
+
     var player: AVPlayer? {
         get {
             playerLayer.player
@@ -92,6 +97,20 @@ private final class PlayerLayerUIView: UIView {
         }
     }
 
+    func updatePlayer(_ player: AVPlayer?) {
+        guard pictureInPictureController?.state != .starting,
+              pictureInPictureController?.state != .active,
+              pictureInPictureController?.state != .stopping else {
+            pendingPlayer = player
+            hasPendingPlayer = true
+            return
+        }
+
+        pendingPlayer = nil
+        hasPendingPlayer = false
+        self.player = player
+    }
+
     var pictureInPictureController: StreamPictureInPictureController? {
         didSet {
             guard oldValue !== pictureInPictureController else {
@@ -99,24 +118,40 @@ private final class PlayerLayerUIView: UIView {
             }
 
             oldValue?.detach(from: playerLayer)
+            pictureInPictureStateObservation?.cancel()
             pictureInPictureController?.attach(to: playerLayer)
+            pictureInPictureStateObservation = pictureInPictureController?.$state
+                .removeDuplicates()
+                .filter { $0 == .idle }
+                .sink { [weak self] _ in
+                    guard let self, self.hasPendingPlayer else { return }
+                    let pendingPlayer = self.pendingPlayer
+                    self.pendingPlayer = nil
+                    self.hasPendingPlayer = false
+                    self.player = pendingPlayer
+                }
         }
     }
 
     func detachPictureInPictureController() {
         pictureInPictureController?.detach(from: playerLayer)
+        pictureInPictureStateObservation?.cancel()
+        pictureInPictureStateObservation = nil
         pictureInPictureController = nil
     }
     
     func prepareForRemoval() {
-        let isPictureInPictureTransitioning =
-            pictureInPictureController?.isPictureInPictureTransitioning == true
+        let isPictureInPictureSessionInProgress =
+            pictureInPictureController?.isPictureInPictureSessionInProgress == true
 
         // Setting this to nil invokes didSet, which unregisters the layer once.
         pictureInPictureController = nil
+        pictureInPictureStateObservation?.cancel()
+        pictureInPictureStateObservation = nil
 
-        // Keep the layer's player connection intact during a PiP transition.
-        if !isPictureInPictureTransitioning {
+        // Keep the PiP source layer and its player connection intact until AVKit
+        // confirms that the active PiP session has stopped.
+        if !isPictureInPictureSessionInProgress {
             player = nil
         }
     }

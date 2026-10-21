@@ -11,6 +11,42 @@ import AVKit
 import Combine
 import Foundation
 
+/// The observable lifecycle of a Picture in Picture session.
+public enum StreamPictureInPictureState: Equatable, Sendable {
+    case idle
+    case starting
+    case active
+    case stopping
+}
+
+/// Restores the host app's playback interface when PiP stops.
+/// Call `completion(true)` only after the player interface is available again.
+public typealias StreamPictureInPictureRestorationHandler =
+    @MainActor (@escaping @Sendable (Bool) -> Void) -> Void
+
+/// Makes an AVKit restoration completion idempotent across host callbacks.
+final class StreamPictureInPictureRestorationCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var hasCompleted = false
+    private let completion: @Sendable (Bool) -> Void
+
+    init(_ completion: @escaping @Sendable (Bool) -> Void) {
+        self.completion = completion
+    }
+
+    func call(_ restored: Bool) {
+        lock.lock()
+        guard !hasCompleted else {
+            lock.unlock()
+            return
+        }
+        hasCompleted = true
+        lock.unlock()
+
+        completion(restored)
+    }
+}
+
 /// Coordinates Picture in Picture for custom StreamVideoView surfaces.
 ///
 /// Share one instance between all views rendering the same playback controller.
@@ -26,12 +62,21 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     @Published public private(set) var isPictureInPicturePossible = false
 
     /// Whether PiP is currently presenting this playback session.
-    @Published public private(set) var isPictureInPictureActive = false
+    @Published public private(set) var state: StreamPictureInPictureState = .idle
 
-    private var isPictureInPictureStarting = false
+    /// Whether the PiP window is active or completing its stop transition.
+    public var isPictureInPictureActive: Bool {
+        state == .active || state == .stopping
+    }
 
-    var isPictureInPictureTransitioning: Bool {
-        isPictureInPictureStarting || isPictureInPictureActive
+    private var stopRequestedWhileStarting = false
+    private var stopWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+
+    /// True from the start request until AVKit confirms the session has stopped.
+    /// The active state is included because the source controller and layer
+    /// must remain retained while PiP owns playback presentation.
+    var isPictureInPictureSessionInProgress: Bool {
+        state != .idle
     }
 
     private var pictureInPictureController: AVPictureInPictureController?
@@ -49,11 +94,11 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     /// Invalidates queued KVO updates from replaced controllers.
     private var controllerGeneration: UInt64 = 0
 
-    private let restorationHandler: StreamAVPlayerRestorationHandler
+    private let restorationHandler: StreamPictureInPictureRestorationHandler
 
     public init(
-        restorationHandler: @escaping StreamAVPlayerRestorationHandler = { completion in
-            completion(true)
+        restorationHandler: @escaping StreamPictureInPictureRestorationHandler = { completion in
+            completion(false)
         }
     ) {
         isSupported = AVPictureInPictureController.isPictureInPictureSupported()
@@ -65,7 +110,7 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     public func startPictureInPicture() {
         guard isSupported,
               isPictureInPicturePossible,
-              !isPictureInPictureTransitioning,
+              state == .idle,
               let controller = pictureInPictureController,
               let layer = attachedLayer else {
             return
@@ -73,14 +118,44 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
 
         // Keep the exact source layer alive until start succeeds or fails.
         protectedLayer = layer
-        isPictureInPictureStarting = true
+        state = .starting
         controller.startPictureInPicture()
     }
 
     /// Requests that an active PiP session stop.
     public func stopPictureInPicture() {
-        guard isPictureInPictureActive else { return }
-        pictureInPictureController?.stopPictureInPicture()
+        switch state {
+        case .starting:
+            stopRequestedWhileStarting = true
+        case .active:
+            state = .stopping
+            pictureInPictureController?.stopPictureInPicture()
+        case .idle, .stopping:
+            break
+        }
+    }
+
+    /// Requests PiP to stop and waits for AVKit to finish its lifecycle callback.
+    /// Cancellation stops waiting but does not cancel the PiP stop request.
+    public func stopAndWaitUntilStopped() async {
+        guard state != .idle else { return }
+
+        let waiterID = UUID()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard state != .idle else {
+                    continuation.resume()
+                    return
+                }
+
+                stopWaiters[waiterID] = continuation
+                stopPictureInPicture()
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelStopWaiter(waiterID)
+            }
+        }
     }
 
     /// Registers a surface. The latest mounted surface is preferred when safe
@@ -90,7 +165,7 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
 
         register(layer)
 
-        if isPictureInPictureTransitioning {
+        if isPictureInPictureSessionInProgress {
             return
         }
 
@@ -110,7 +185,7 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
             return
         }
 
-        if isPictureInPictureTransitioning {
+        if isPictureInPictureSessionInProgress {
             return
         }
 
@@ -137,7 +212,7 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     }
 
     private func installMostRecentAvailableLayer() {
-        guard !isPictureInPictureTransitioning else { return }
+        guard !isPictureInPictureSessionInProgress else { return }
 
         guard let layer = mostRecentAvailableLayer() else {
             clearController()
@@ -153,7 +228,7 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
 
     private func installController(for layer: AVPlayerLayer) {
         // This method must never replace a controller during PiP.
-        guard !isPictureInPictureTransitioning else { return }
+        guard !isPictureInPictureSessionInProgress else { return }
 
         clearController()
         attachedLayer = layer
@@ -228,11 +303,24 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     }
 
     private func finishPictureInPictureTransition() {
-        isPictureInPictureStarting = false
-        isPictureInPictureActive = false
+        state = .idle
+        stopRequestedWhileStarting = false
         protectedLayer = nil
+        resumeStopWaiters()
 
         installMostRecentAvailableLayer()
+    }
+
+    private func cancelStopWaiter(_ id: UUID) {
+        stopWaiters.removeValue(forKey: id)?.resume()
+    }
+
+    private func resumeStopWaiters() {
+        let waiters = stopWaiters.values
+        stopWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
 }
 
@@ -245,8 +333,21 @@ extension StreamPictureInPictureController: AVPictureInPictureControllerDelegate
             return
         }
 
-        isPictureInPictureStarting = false
-        isPictureInPictureActive = true
+        state = .active
+        if stopRequestedWhileStarting {
+            stopRequestedWhileStarting = false
+            stopPictureInPicture()
+        }
+    }
+
+    public func pictureInPictureControllerWillStopPictureInPicture(
+        _ pictureInPictureController: AVPictureInPictureController
+    ) {
+        guard self.pictureInPictureController === pictureInPictureController else {
+            return
+        }
+
+        state = .stopping
     }
 
     public func pictureInPictureControllerDidStopPictureInPicture(
@@ -279,7 +380,7 @@ extension StreamPictureInPictureController: AVPictureInPictureControllerDelegate
             return
         }
 
-        let completionGate = PictureInPictureRestorationCompletion(completionHandler)
+        let completionGate = StreamPictureInPictureRestorationCompletion(completionHandler)
         restorationHandler { restored in
             completionGate.call(restored)
         }
@@ -295,26 +396,4 @@ private final class WeakPlayerLayerReference {
     }
 }
 
-/// Makes restoration completion idempotent if a host callback calls it twice.
-private final class PictureInPictureRestorationCompletion: @unchecked Sendable {
-    private let lock = NSLock()
-    private var hasCompleted = false
-    private let completion: @Sendable (Bool) -> Void
-
-    init(_ completion: @escaping @Sendable (Bool) -> Void) {
-        self.completion = completion
-    }
-
-    func call(_ restored: Bool) {
-        lock.lock()
-        guard !hasCompleted else {
-            lock.unlock()
-            return
-        }
-        hasCompleted = true
-        lock.unlock()
-
-        completion(restored)
-    }
-}
 #endif
