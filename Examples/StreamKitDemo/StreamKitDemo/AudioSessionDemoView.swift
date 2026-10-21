@@ -97,9 +97,7 @@ struct AudioSessionDemoView: View {
         }
         .task {
             do {
-                let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playback, mode: .moviePlayback)
-                try await activate(session)
+                try await DemoPlaybackAudioSession.configureAndActivate()
 
                 trackState.prepareForNewSource()
                 let handle = controller.load(MediaSource(url: sourceURL))
@@ -132,35 +130,6 @@ struct AudioSessionDemoView: View {
         }
     }
 
-    private func activate(_ session: AVAudioSession) async throws {
-        if #available(iOS 27.0, *) {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                session.activate(options: []) { activated, error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else if activated {
-                        continuation.resume()
-                    } else {
-                        continuation.resume(throwing: AudioSessionActivationError.activationFailed)
-                    }
-                }
-            }
-        } else {
-            // iOS 16–26 have no asynchronous activation API. Run the legacy
-            // call away from the UI thread; newer iOS uses the system async API above.
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    do {
-                        try session.setActive(true)
-                        continuation.resume()
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
-        }
-    }
-
     private func postInterruption(
         _ type: AVAudioSession.InterruptionType,
         options: AVAudioSession.InterruptionOptions = []
@@ -177,8 +146,4 @@ struct AudioSessionDemoView: View {
             userInfo: userInfo
         )
     }
-}
-
-private enum AudioSessionActivationError: Error {
-    case activationFailed
 }

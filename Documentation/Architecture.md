@@ -56,10 +56,14 @@ flowchart LR
     KeySession -->|AVContentKeyResponse| Asset
     Engine --> Snapshots[Playback snapshots]
     Controller --> Snapshots
+    Controller -->|same AVPlayer output| CustomView[StreamVideoView and app-owned controls]
+    Controller -->|same AVPlayer output| SystemView[Optional StreamAVPlayerView using AVPlayerViewController]
     KeySession -. redacted key result .-> Diagnostics[Optional host diagnostics]
 ```
 
 The diagram shows ownership and data flow, not a deployment topology. FairPlay certificate retrieval, key-identifier mapping, license HTTP/authentication, and response-envelope parsing belong to the host provider. The demo's Axinom provider is sample-only. The Axinom public test vector has now played successfully in a live demo run; production-provider and lifecycle acceptance checks remain open.
+
+`StreamVideoView` renders a controller into an `AVPlayerLayer` for app-owned controls. A `StreamPictureInPictureController` coordinates PiP for those custom surfaces; share one instance across views rendering the same controller, and start PiP in response to a user action. `StreamAVPlayerView` is an alternative AVKit-backed surface that provides Apple's standard controls and system PiP/AirPlay affordances where supported. Its restoration handler lets the host restore a dismissed player route before AVKit completes restoration. Use one renderer at a time for a controller. The host owns process-wide audio-session configuration and the app's `audio` background mode. The demo's standalone custom-control fullscreen cover requests landscape while presented and restores the orientation active before entry; this is sample behavior, not a package-wide orientation policy.
 
 ## Platform Boundary
 - **Platform-independent**: Intent, Phase, Snapshot, Failure enums

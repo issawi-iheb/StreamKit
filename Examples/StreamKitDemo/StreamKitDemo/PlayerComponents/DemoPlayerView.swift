@@ -12,6 +12,7 @@ import SwiftUI
 @MainActor
 struct DemoPlayerView: View {
     let controller: StreamPlayerController
+    var pictureInPictureController: StreamPictureInPictureController? = nil
     let snapshot: PlaybackSnapshot
     let trackState: PlayerTrackState
     let isFullscreen: Bool
@@ -23,6 +24,7 @@ struct DemoPlayerView: View {
 
     @State private var playbackRate: Float = 1.0
     @State private var playbackRateError: String?
+    @State private var shouldResumeAfterPictureInPicture = false
 
     private let playbackRates: [Float] = [
         0.5,
@@ -63,6 +65,16 @@ struct DemoPlayerView: View {
         }
         .background(.black)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            if isFullscreen {
+                DemoInterfaceOrientation.requestFullscreenLandscape()
+            }
+        }
+        .onDisappear {
+            if isFullscreen {
+                DemoInterfaceOrientation.restorePreviousOrientation()
+            }
+        }
         .onChange(of: snapshot.currentTime) { _, newTime in
             guard !isSeeking else {
                 return
@@ -104,6 +116,41 @@ struct DemoPlayerView: View {
                 controlsVisible = false
             }
         }
+        .onChange(
+            of: pictureInPictureController?.isPictureInPictureActive ?? false
+        ) { wasActive, isActive in
+            if isActive {
+                shouldResumeAfterPictureInPicture =
+                    controller.snapshot.intent == .play &&
+                    (
+                        controller.snapshot.phase == .playing ||
+                        controller.snapshot.phase == .waiting
+                    )
+                return
+            }
+
+            guard wasActive, shouldResumeAfterPictureInPicture else {
+                return
+            }
+
+            shouldResumeAfterPictureInPicture = false
+
+            guard controller.snapshot.intent == .play else {
+                return
+            }
+
+            Task {
+                do {
+                    try await controller.play()
+                } catch is CancellationError {
+                    // The task was cancelled; no further action is needed.
+                } catch {
+                    // Playback could not resume. The controller reports its
+                    // playback failure through its normal state/event handling.
+                    print("Failed to resume playback after PiP: \(error)")
+                }
+            }
+        }
     }
 
     // MARK: Player Content
@@ -117,12 +164,25 @@ struct DemoPlayerView: View {
 
             ZStack {
                 Color.black
+                if !isFullscreen &&
+                    pictureInPictureController?.isPictureInPictureActive == true {
+                    Color.black
+                        .contentShape(Rectangle())
+                        .zIndex(1)
+                }
 
-                StreamVideoView(controller: controller)
+
+                if pictureInPictureController?.isPictureInPictureActive != true {
+                    StreamVideoView(
+                        controller: controller,
+                        pictureInPictureController: pictureInPictureController
+                    )
                     .frame(
                         width: geometry.size.width,
                         height: geometry.size.height
                     )
+                }
+
 
                 if snapshot.phase == .waiting {
                     ProgressView()
@@ -183,7 +243,8 @@ struct DemoPlayerView: View {
                     .allowsHitTesting(!controlsVisible)
                     .zIndex(1)
 
-                if controlsVisible {
+                if controlsVisible &&
+                        pictureInPictureController?.isPictureInPictureActive != true {
                     controlsOverlay(
                         width: width,
                         height: geometry.size.height,
@@ -243,6 +304,7 @@ struct DemoPlayerView: View {
                 ) {
                     onFullscreen()
                 }
+                .accessibilityIdentifier("player.exit-fullscreen")
             } else {
                 Text("STREAMKIT")
                     .font(.system(size: 10, weight: .semibold))
@@ -481,6 +543,22 @@ struct DemoPlayerView: View {
 
                 trackControls
 
+                if let pictureInPictureController,
+                   pictureInPictureController.isSupported {
+                    Button {
+                        pictureInPictureController.startPictureInPicture()
+                    } label: {
+                        Image(systemName: "pip.enter")
+                            .font(.system(size: 15, weight: .medium))
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Start Picture in Picture")
+                    .accessibilityIdentifier("player.start-pip")
+                    .disabled(!pictureInPictureController.isPictureInPicturePossible)
+                }
+
                 if !isFullscreen {
                     Button(action: onFullscreen) {
                         Image(
@@ -492,6 +570,7 @@ struct DemoPlayerView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Enter full screen")
+                    .accessibilityIdentifier("player.enter-fullscreen")
                 }
             }
 

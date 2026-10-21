@@ -32,6 +32,7 @@ struct DemoHomeView: View {
                             symbol: "play.rectangle"
                         )
                     }
+                    .accessibilityIdentifier("demo.standalone-player")
 
                     NavigationLink {
                         ConcurrentPlayersDemoView()
@@ -52,6 +53,19 @@ struct DemoHomeView: View {
                             symbol: "list.bullet.rectangle"
                         )
                     }
+                }
+
+                Section("Presentation") {
+                    NavigationLink {
+                        PresentationDemoView()
+                    } label: {
+                        DemoNavigationRow(
+                            title: "AVKit Player & Picture in Picture",
+                            subtitle: "Switch between system AVKit and custom PiP",
+                            symbol: "pip"
+                        )
+                    }
+                    .accessibilityIdentifier("demo.presentation-avkit-pip")
                 }
 
                 Section("Protected Playback") {

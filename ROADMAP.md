@@ -43,10 +43,11 @@ separate integration boundaries for DRM and advertising.
 - **Implemented, pending live protected-origin validation** — `MediaBearerAuthentication` supplies per-resource bearer tokens through a custom AVFoundation resource loader; HLS child URLs are rewritten, HTTPS is required, tokens are scoped to exact trusted hosts, and finite/open-ended byte ranges validate status, `Content-Range`, and response length. Generic arbitrary-header configuration remains absent.
 - **Implemented, simulator-verified** — The demo has a separate Protected Playback menu section. It resets track choices by source revision and rejects stale track-discovery results after a source change. Stable accessibility identifiers support its navigation tests. Playlist/Playback Events remain planned placeholders.
 - **Verified by unit tests** — 111 Swift package tests pass, including range construction/validation, stale range sizes, replay behavior, token refresh callbacks, host scoping, playlist rewriting, interruption recovery, cookie isolation, and FairPlay exchange failures/redaction/cancellation.
-- **Verified on iOS Simulator** — All 6 demo unit/UI tests pass on iPhone 17 Pro / iOS 26.5. This confirms sample navigation and input rendering, not real network playback, FairPlay renewal, or device-only behavior.
+- **Verified on iOS Simulator** — All 8 demo unit/UI tests pass on iPhone 17 Pro / iOS 26.5. This confirms sample navigation, fullscreen enter/exit, and presentation configuration UI, not actual system PiP or physical-device orientation behavior.
 - **User-verified** — Basic playback works in the demo; the user also verified protected playback of the public Axinom FairPlay vector. This does not verify a customer-controlled origin or production DRM configuration.
 - **Implemented and unit-tested** — Autoplay now waits for AVFoundation's observed playing/waiting state before reporting the phase. Authenticated requests use only explicitly configured cookies, not shared app cookie storage.
 - **CI updated; hosted run pending** — GitHub Actions now runs the demo and UI tests on an iPhone 17 Pro simulator instead of only compiling the test bundle. Local simulator verification passes; the updated workflow still needs a hosted run.
+- **Implemented, simulator/build verification pending** — Public `StreamAVPlayerView` presents the same controller through `AVPlayerViewController` with system playback/PiP/AirPlay controls and opt-in automatic PiP. The demo has a separate AVKit/PiP entry, configures playback audio, and requests landscape for custom fullscreen; device PiP and rotation acceptance remain required.
 
 ### NEXT:
 - When protected-stream test materials are available, verify bearer authentication against a controlled HTTPS HLS origin: master and child playlists, segments, keys, ranges, redirects, token refresh, and cancellation on iOS. Public samples do not provide reusable bearer-protected media.
@@ -55,7 +56,9 @@ separate integration boundaries for DRM and advertising.
 - Define and verify audio-focus behavior when multiple controllers have play intent; decide whether the host or StreamKit coordinates which controller resumes.
 - The demo target is currently set to iOS 26.5 to allow installation on the user's iOS 26.5 device. This still does not demonstrate the package's iOS 16+ support floor; decide whether to lower the demo to iOS 17 (Swift Observation floor) and verify against that runtime.
 - Make the audio-session sample's deactivation/ownership behavior explicit when leaving the example screen.
-- Run the updated simulator test action in hosted CI and add leave/reopen/fullscreen-return lifecycle coverage; the current six UI/sample tests cover navigation and input presentation but not those lifecycle paths.
+- Run the updated simulator test action in hosted CI and add leave/reopen lifecycle coverage; the current eight demo tests cover menu navigation, fullscreen enter/exit, and input presentation but not repeated leave/reopen or system PiP lifecycle.
+- Verify PiP start, background transition, restoration to the demo route, and stop on a physical device; verify custom fullscreen enters landscape and restores the prior orientation on iPhone and iPad. Simulator tests can verify navigation and configuration UI, not system PiP behavior.
+- Decide whether StreamKit needs its own custom-controls PiP coordinator. The current public option intentionally delegates PiP behavior and restoration to AVKit's standard player UI.
 - Profile lifecycle cleanup and playback behavior with real HLS and progressive media.
 - Launch the demo on an iOS simulator and run the new bearer-auth screen when simulator services are available; generic iOS Simulator build succeeds.
 - Confirm the 32× playback-rate policy against product requirements before release.
@@ -93,11 +96,11 @@ separate integration boundaries for DRM and advertising.
 - Provider integrations implemented and tested
 - Regression tests for ad playback scenarios
 
-## PHASE 5 — Advanced playback
+## PHASE 5 — Advanced playback and presentation
 
 ### ACCEPTANCE CRITERIA:
-- Picture in Picture functionality implemented and verified
-- AirPlay routing supported
+- **Implemented, device validation pending** — System PiP and AirPlay controls are available through the optional AVKit-backed `StreamAVPlayerView`. Custom-layer PiP is available through `StreamPictureInPictureController`; a bespoke control overlay inside PiP is not included.
+- **Implemented in demo, device validation pending** — Custom fullscreen requests landscape and restores the orientation active before presentation. No package-wide orientation policy is imposed on consuming apps.
 - **Partial** — Audio-session interruption recovery and demo background-audio configuration are implemented; device and supported-OS verification remains open.
 - Live-stream and live-edge behavior handled
 - Low-latency HLS assessment completed
@@ -129,8 +132,8 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Latest commit**: `658ce93` (docs: reconcile StreamKit audit status and roadmap). The current working tree contains the follow-up implementation and test changes described below; they are not committed yet.
+- **Latest commit**: `bce7c70` (fix: harden playback ranges and replay lifecycle). The current working tree contains the presentation follow-up described below; it is not committed yet.
 - **Current phase**: Phase 2 — FairPlay core and public Axinom test-vector playback are implemented/verified; DRM lifecycle and production-provider acceptance remain in progress. Phase 1 production-readiness issues remain open.
-- **Latest local test result (2026-10-20)**: `swift test` passes **111 tests in 11 suites**; `xcodebuild test` passes **6 demo unit/UI tests** on iPhone 17 Pro / iOS 26.5 Simulator. The updated GitHub workflow now executes those simulator tests, but its hosted run is pending. The current changes close range-response validation gaps, demo track-cache staleness, ended finite-media replay, and UI-test selectors. They do not verify a protected origin on device, FairPlay renewal/rejection, background/routing behavior, or the package's iOS 16 floor. Provider-dependent FairPlay renewal/rejection remains blocked pending suitable materials.
+- **Latest local test result (2026-10-20)**: `swift test` passes **111 tests in 11 suites**; `xcodebuild test` passes **8 demo unit/UI tests** on iPhone 17 Pro / iOS 26.5 Simulator. The UI suite covers navigation to AVKit/PiP settings and custom fullscreen enter/exit. It cannot verify real PiP or device rotation. The updated GitHub workflow's hosted run remains pending. Protected-origin playback, FairPlay renewal/rejection, background/routing behavior, and the package's iOS 16 floor remain unverified.
 - **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes the 2026-10-19 full SDK reassessment and the 2026-10-20 architecture and SDK comparison. StreamKit is not yet production-ready against Phase 1 criteria.
-- **Next milestone**: Run the updated simulator job on hosted CI and add destination lifecycle tests; validate the byte-range loader against a controlled protected HLS origin on device; add an iOS 16 package build check; and create a test seam for real `AVContentKeySession` callback lifecycle tests. End-to-end FairPlay renewal/rejection stays blocked pending provider materials. Then advance presentation work: AVKit option, PiP, fullscreen/landscape policy, and AirPlay. The public Axinom vector verifies playback of that test asset only, not a production DRM integration.
+- **Next milestone**: Build and run the new AVKit/PiP presentation sample, then verify user-started and automatic PiP, restoration, and fullscreen orientation on a physical iPhone/iPad. The system-player API delegates PiP and AirPlay UI to AVKit; custom UI PiP remains a separate future design decision. Then close the iOS support-floor and hosted-CI lifecycle gaps. Protected-origin and FairPlay lifecycle acceptance remain dependent on suitable provider materials.

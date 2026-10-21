@@ -151,6 +151,47 @@ try await controller.selectSubtitleTrack(id: "subtitle-track-456")
 
 Track selection requires media to be ready (not idle, loading, or failed).
 
+## System Player, Picture in Picture, and Fullscreen
+
+Use `StreamVideoView` when you want to build custom controls. For Apple's standard playback interface, including system Picture in Picture and AirPlay controls where supported, use `StreamAVPlayerView`:
+
+```swift
+StreamAVPlayerView(
+    controller: controller,
+    automaticallyStartsPictureInPictureWhenLeavingApp: false
+)
+.frame(height: 240)
+```
+
+If your app can dismiss the player screen while PiP remains active, supply a restoration handler that presents the appropriate screen before calling its completion with `true`:
+
+```swift
+StreamAVPlayerView(controller: controller) { completion in
+    // Restore the owning player screen here.
+    completion(true)
+}
+```
+
+Automatic PiP is opt-in and should only be enabled when the inline player is the primary content. PiP requires device support, a playback audio session, and the app's `audio` background mode. The host app owns those settings. The demo's **AVKit Player & Picture in Picture** entry lets you switch between `StreamAVPlayerView` and custom `StreamVideoView` rendering. Automatic PiP is available in the AVKit mode; custom controls can start PiP from a user action when the controller reports that PiP is possible. The standalone custom-control demo requests landscape while fullscreen is open, then restores the orientation that was active before fullscreen.
+
+For custom controls, share one `StreamPictureInPictureController` across every `StreamVideoView` rendering the same player:
+
+```swift
+@StateObject private var pipController = StreamPictureInPictureController()
+
+StreamVideoView(
+    controller: controller,
+    pictureInPictureController: pipController
+)
+
+Button("Start PiP") {
+    pipController.startPictureInPicture()
+}
+.disabled(!pipController.isPictureInPicturePossible)
+```
+
+`StreamAVPlayerView` and `StreamVideoView` are alternative renderers for one controller; do not display both at the same time.
+
 ## Audio Sessions, Interruptions, and Background Playback
 
 StreamKit observes iOS audio-session interruptions for each controller. By default, it resumes playback only when playback was requested before the interruption and iOS reports that resuming is appropriate. An explicit `pause()` during the interruption cancels automatic resumption. Set `automaticallyResumesAfterAudioInterruption: false` in `PlayerConfiguration` to disable that behavior.
@@ -242,7 +283,7 @@ See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for t
 - AVFoundation-based playback only
 - No built-in UI controls (use StreamVideoView with custom controls)
 - No advertising; the public Axinom FairPlay vector is verified, while customer-provider renewal and failure scenarios remain unverified
-- Picture-in-Picture, AirPlay presentation, and automatic fullscreen/landscape behavior are not implemented
+- StreamKit does not provide a full playback-controls UI or set a package-wide orientation policy. Pair `StreamVideoView` with `StreamPictureInPictureController` for app-owned controls, or use `StreamAVPlayerView` for AVKit's standard controls. The demo requests landscape for its custom fullscreen mode.
 - Offline playback requires application-level file handling
 
 ## Example Application
@@ -256,6 +297,7 @@ See the [StreamKitDemo](Examples/StreamKitDemo/) target for a complete example s
 - Host-scoped bearer authentication for protected HLS streams
 - Dedicated Axinom public FairPlay test vector and provider-integration guide
 - Audio-session interruption recovery and background audio setup
+- AVKit system controls, Picture in Picture, AirPlay affordances, and custom fullscreen landscape behavior
 
 The demo's separate **Protected Playback** section is prefilled with a public Mux HLS sample (`https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`) and its trusted host. Leave the token blank to check ordinary HLS playback. To exercise bearer authentication, replace the URL and trusted-host list with a protected stream you control and enter its valid development token. The public sample is not bearer-protected and does not verify authenticated playback.
 

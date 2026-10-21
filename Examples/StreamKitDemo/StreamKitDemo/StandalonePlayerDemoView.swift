@@ -13,6 +13,7 @@ import StreamKit
 @MainActor
 struct StandalonePlayerDemoView: View {
     @State private var controller = StreamPlayerController()
+    @StateObject private var pictureInPictureController = StreamPictureInPictureController()
 
     @State private var snapshot = PlaybackSnapshot(
         phase: .idle,
@@ -31,6 +32,7 @@ struct StandalonePlayerDemoView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     DemoPlayerView(
                         controller: controller,
+                        pictureInPictureController: pictureInPictureController,
                         snapshot: snapshot,
                         trackState: trackState,
                         isFullscreen: false,
@@ -70,6 +72,7 @@ struct StandalonePlayerDemoView: View {
         .fullScreenCover(isPresented: $isFullscreen) {
             DemoPlayerView(
                 controller: controller,
+                pictureInPictureController: pictureInPictureController,
                 snapshot: snapshot,
                 trackState: trackState,
                 isFullscreen: true,
@@ -82,20 +85,28 @@ struct StandalonePlayerDemoView: View {
             .ignoresSafeArea()
         }
         .task {
-            guard let url = URL(
-                string: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
-            ) else {
-                errorMessage = "Invalid media URL."
-                return
-            }
-
-            trackState.prepareForNewSource()
-            let handle = controller.load(MediaSource(url: url))
-
             do {
+                try await DemoPlaybackAudioSession.configureAndActivate()
+
+                guard !Task.isCancelled else { return }
+
+                guard let url = URL(
+                    string: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
+                ) else {
+                    errorMessage = "Invalid media URL."
+                    return
+                }
+
+                trackState.prepareForNewSource()
+
+                let handle = controller.load(MediaSource(url: url))
                 try await handle.waitUntilReady()
+
+                guard !Task.isCancelled else { return }
+
                 try await controller.play()
             } catch {
+                guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
             }
         }
@@ -104,20 +115,20 @@ struct StandalonePlayerDemoView: View {
                 snapshot = newSnapshot
             }
         }
-        .task {
-            await withTaskCancellationHandler {
-                while !Task.isCancelled {
-                    do {
-                        try await Task.sleep(for: .seconds(3_600))
-                    } catch {
-                        break
-                    }
-                }
-            } onCancel: {
-                Task { @MainActor in
-                    await controller.shutdown()
-                }
-            }
-        }
+//        .task {
+//            await withTaskCancellationHandler {
+//                while !Task.isCancelled {
+//                    do {
+//                        try await Task.sleep(for: .seconds(3_600))
+//                    } catch {
+//                        break
+//                    }
+//                }
+//            } onCancel: {
+//                Task { @MainActor in
+//                    await controller.shutdown()
+//                }
+//            }
+//        }
     }
 }

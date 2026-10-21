@@ -38,7 +38,7 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["demo.bearer-authenticated-hls"].tap()
+        tapMenuEntry("demo.bearer-authenticated-hls", in: app)
 
         XCTAssertTrue(app.textFields["HTTPS media URL"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.textFields["Trusted media hosts"].exists)
@@ -66,7 +66,7 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["demo.axinom-fairplay"].tap()
+        tapMenuEntry("demo.axinom-fairplay", in: app)
 
         XCTAssertTrue(app.textFields["Protected HLS manifest URL"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.textFields["FairPlay certificate URL"].exists)
@@ -76,10 +76,60 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testPresentationExampleShowsAVKitAndPictureInPictureOptions() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["demo.presentation-avkit-pip"].tap()
+
+        XCTAssertTrue(app.staticTexts["StreamKit Player and Picture in Picture"].waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "presentation-renderer-picker")
+                .firstMatch.exists
+        )
+        XCTAssertTrue(app.switches["presentation-automatic-pip"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "presentation-playback-phase")
+                .firstMatch.exists
+        )
+    }
+
+    @MainActor
+    func testStandalonePlayerCanEnterAndExitFullscreen() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        tapMenuEntry("demo.standalone-player", in: app)
+
+        let enterFullscreen = app.buttons["player.enter-fullscreen"]
+        XCTAssertTrue(enterFullscreen.waitForExistence(timeout: 5))
+        enterFullscreen.tap()
+
+        let exitFullscreen = app.buttons["player.exit-fullscreen"]
+        XCTAssertTrue(exitFullscreen.waitForExistence(timeout: 5))
+        exitFullscreen.tap()
+
+        XCTAssertTrue(app.staticTexts["StreamKit Demo"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
         }
+    }
+
+    @MainActor
+    private func tapMenuEntry(_ identifier: String, in app: XCUIApplication) {
+        let entry = app.buttons[identifier]
+        for _ in 0..<5 {
+            if entry.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(entry.isHittable, "Expected menu entry \(identifier) to be visible after scrolling")
+        entry.tap()
     }
 }
