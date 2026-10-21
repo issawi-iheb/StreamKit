@@ -5,11 +5,15 @@ import SwiftUI
 @MainActor
 struct PresentationDemoView: View {
 
-    let presentationController: StreamAVPlayerPresentationController
+    let session: PresentationDemoSession
 
-    @State private var controller = StreamPlayerController()
-    @StateObject private var pictureInPictureController =
-        StreamPictureInPictureController()
+    private var controller: StreamPlayerController {
+        session.playerController
+    }
+
+    private var pictureInPictureController: StreamPictureInPictureController {
+        session.pictureInPictureController
+    }
 
     @State private var snapshot = PlaybackSnapshot(
         phase: .idle,
@@ -26,152 +30,171 @@ struct PresentationDemoView: View {
     )!
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-
-            ZStack(alignment: .bottomTrailing) {
-                Group {
-                    if usesSystemPlayer {
-                        StreamAVPlayerView(
-                            controller: controller,
-                            presentationController: presentationController,
-                            automaticallyStartsPictureInPictureWhenLeavingApp:
-                                automaticallyStartsPictureInPicture
-                        )
-                        .accessibilityIdentifier("presentation-system-player")
-                    } else {
-                        StreamVideoView(
-                            controller: controller,
-                            pictureInPictureController: pictureInPictureController
-                        )
-                        .accessibilityIdentifier("presentation-custom-player")
-                    }
-                }
-                .frame(height: 240)
-                .background(.black)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                Button {
-                    isFullscreenPresented = true
-                } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(12)
-                        .background(.black.opacity(0.65))
-                        .clipShape(Circle())
-                }
-                .padding(12)
-                .accessibilityLabel("Enter fullscreen")
-            }
-
-            Text("StreamKit Player and Picture in Picture")
-                .font(.title2.bold())
-
-            Picker("Player controls", selection: $usesSystemPlayer) {
-                Text("System AVKit").tag(true)
-                Text("Custom").tag(false)
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("presentation-renderer-picker")
-
-            Toggle(
-                "Automatically start PiP when leaving the app",
-                isOn: $automaticallyStartsPictureInPicture
-            )
-            .accessibilityIdentifier("presentation-automatic-pip")
-            .disabled(!usesSystemPlayer)
-
-            Text(
-                "Use the fullscreen button to expand the player. " +
-                "Start PiP while playback is active, then switch apps."
-            )
-            .foregroundStyle(.secondary)
-
-            HStack(spacing: 12) {
-                Button {
-                    Task {
-                        do {
-                            try await controller.play()
-                        } catch {
-                            errorMessage = error.localizedDescription
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                ZStack(alignment: .bottomTrailing) {
+                    Group {
+                        if usesSystemPlayer {
+                            StreamAVPlayerView(
+                                controller: controller,
+                                presentationController: session.systemPresentationController,
+                                automaticallyStartsPictureInPictureWhenLeavingApp:
+                                    automaticallyStartsPictureInPicture
+                            )
+                            .accessibilityIdentifier("presentation-system-player")
+                        } else {
+                            StreamVideoView(
+                                controller: controller,
+                                pictureInPictureController: pictureInPictureController
+                            )
+                            .accessibilityIdentifier("presentation-custom-player")
                         }
                     }
-                } label: {
-                    Label("Play", systemImage: "play.fill")
-                }
-                .buttonStyle(.borderedProminent)
+                    .frame(height: 230)
+                    .background(.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
 
-                Button {
-                    Task {
-                        do {
-                            try await controller.pause()
-                        } catch {
-                            errorMessage = error.localizedDescription
-                        }
-                    }
-                } label: {
-                    Label("Pause", systemImage: "pause.fill")
-                }
-                .buttonStyle(.bordered)
-
-                if !usesSystemPlayer {
                     Button {
-                        pictureInPictureController.startPictureInPicture()
+                        isFullscreenPresented = true
                     } label: {
-                        Label("Start PiP", systemImage: "pip")
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .padding(12)
+                            .background(.black.opacity(0.65), in: Circle())
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(
-                        !pictureInPictureController.isPictureInPicturePossible
+                    .padding(12)
+                    .accessibilityLabel("Enter fullscreen")
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Picture in Picture")
+                        .font(.title2.bold())
+                        .accessibilityIdentifier("presentation-player-interface-ready")
+
+                    Text("Compare Apple’s AVKit controls with StreamKit’s custom player.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Player style", systemImage: "rectangle.on.rectangle")
+                        .font(.headline)
+
+                    Picker("Player controls", selection: $usesSystemPlayer) {
+                        Text("System AVKit").tag(true)
+                        Text("Custom").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("presentation-renderer-picker")
+                }
+                .demoCard()
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Label("Playback", systemImage: "play.circle")
+                        .font(.headline)
+
+                    HStack(spacing: 12) {
+                        Button {
+                            Task {
+                                do {
+                                    try await controller.play()
+                                } catch {
+                                    errorMessage = error.localizedDescription
+                                }
+                            }
+                        } label: {
+                            Label("Play", systemImage: "play.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button {
+                            Task { await controller.pause() }
+                        } label: {
+                            Label("Pause", systemImage: "pause.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    if !usesSystemPlayer {
+                        Button {
+                            pictureInPictureController.startPictureInPicture()
+                        } label: {
+                            Label("Start Picture in Picture", systemImage: "pip")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!pictureInPictureController.isPictureInPicturePossible)
+                        .accessibilityIdentifier("presentation-start-pip")
+                    }
+                }
+                .demoCard()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("PiP behavior", systemImage: "pip")
+                        .font(.headline)
+
+                    Toggle(
+                        "Start PiP when leaving the app",
+                        isOn: $automaticallyStartsPictureInPicture
                     )
-                    .accessibilityIdentifier("presentation-start-pip")
+                    .accessibilityIdentifier("presentation-automatic-pip")
+                    .disabled(!usesSystemPlayer)
+
+                    Text(usesSystemPlayer
+                         ? "Available with AVKit. Start playback, then leave the app to test it."
+                         : "Custom PiP starts from its button above while playback is active.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    if !usesSystemPlayer && !pictureInPictureController.isSupported {
+                        Label("PiP is not supported on this device.", systemImage: "info.circle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("presentation-pip-unsupported")
+                    } else if !usesSystemPlayer && !pictureInPictureController.isPictureInPicturePossible {
+                        Label("PiP is not currently available for this player.", systemImage: "info.circle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .demoCard()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Session status", systemImage: "waveform.path")
+                        .font(.headline)
+
+                    LabeledContent("Playback", value: String(describing: snapshot.phase).capitalized)
+                        .accessibilityIdentifier("presentation-playback-phase")
+                    Divider()
+                    LabeledContent("Picture in Picture", value: activePictureInPictureState == .idle ? "Inactive" : "Active")
+                        .accessibilityIdentifier("presentation-pip-state")
+                }
+                .demoCard()
+
+                if let errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                        .accessibilityIdentifier("presentation-error")
                 }
             }
-
-            if !usesSystemPlayer && !pictureInPictureController.isSupported {
-                Text("Picture in Picture is not supported on this device.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            } else if !usesSystemPlayer && !pictureInPictureController.isPictureInPicturePossible {
-                Text("PiP is not currently available for this player.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            LabeledContent(
-                "Playback phase",
-                value: String(describing: snapshot.phase)
-            )
-            .accessibilityIdentifier("presentation-playback-phase")
-
-            LabeledContent(
-                "PiP active",
-                value: pictureInPictureController.isPictureInPictureActive
-                    ? "Yes"
-                    : "No"
-            )
-
-            if let errorMessage {
-                Label(
-                    errorMessage,
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(.red)
-                .accessibilityIdentifier("presentation-error")
-            }
-
-            Spacer(minLength: 0)
+            .padding(20)
         }
-        .padding()
-        .frame(
-            maxWidth: .infinity,
-            maxHeight: .infinity,
-            alignment: .topLeading
-        )
         .background(Color(uiColor: .systemBackground))
         .navigationTitle("StreamKit & PiP")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            session.playerInterfaceDidAppear()
+        }
+        .onDisappear {
+            session.playerInterfaceDidDisappear()
+        }
         .fullScreenCover(isPresented: $isFullscreenPresented) {
             FullscreenDemoPlayerView(
                 controller: controller,
@@ -189,6 +212,12 @@ struct PresentationDemoView: View {
         }
     }
 
+    private var activePictureInPictureState: StreamPictureInPictureState {
+        usesSystemPlayer
+            ? session.systemPresentationController.state
+            : pictureInPictureController.state
+    }
+
     private func observeSnapshots() async {
         for await newSnapshot in controller.snapshots {
             guard !Task.isCancelled else { return }
@@ -197,7 +226,7 @@ struct PresentationDemoView: View {
     }
 
     private func loadPlaybackIfNeeded() async {
-        guard snapshot.phase == .idle else { return }
+        guard controller.snapshot.phase == .idle else { return }
 
         do {
             try await DemoPlaybackAudioSession.configureAndActivate()
@@ -214,6 +243,17 @@ struct PresentationDemoView: View {
             guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private extension View {
+    func demoCard() -> some View {
+        padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Color(uiColor: .secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 18)
+            )
     }
 }
 

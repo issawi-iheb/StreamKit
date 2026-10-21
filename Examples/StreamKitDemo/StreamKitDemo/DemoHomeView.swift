@@ -9,9 +9,7 @@ import SwiftUI
 import StreamKit
 
 struct DemoHomeView: View {
-    @State private var isPresentationPresented = false
-    @StateObject private var presentationController =
-        StreamAVPlayerPresentationController { completion in completion(true) }
+    @StateObject private var presentationSession = PresentationDemoSession()
 
     var body: some View {
         NavigationStack {
@@ -62,7 +60,7 @@ struct DemoHomeView: View {
 
                 Section("Presentation") {
                     Button {
-                        isPresentationPresented = true
+                        presentationSession.isPlayerPresented = true
                     } label: {
                         DemoNavigationRow(
                             title: "AVKit Player & Picture in Picture",
@@ -71,6 +69,14 @@ struct DemoHomeView: View {
                         )
                     }
                     .accessibilityIdentifier("demo.presentation-avkit-pip")
+
+                    if presentationSession.pictureInPictureState != .idle {
+                        Button("Stop active PiP") {
+                            presentationSession.pictureInPictureController
+                                .stopPictureInPicture()
+                        }
+                        .accessibilityIdentifier("demo.stop-active-pip")
+                    }
                 }
 
                 Section("Protected Playback") {
@@ -110,17 +116,8 @@ struct DemoHomeView: View {
                 }
             }
             .navigationTitle("StreamKit")
-            .navigationDestination(isPresented: $isPresentationPresented) {
-                PresentationDemoView(presentationController: presentationController)
-            }
-            .onAppear {
-                presentationController.restorationHandler = { completion in
-                    isPresentationPresented = true
-                    Task { @MainActor in
-                        await Task.yield()
-                        completion(true)
-                    }
-                }
+            .navigationDestination(isPresented: $presentationSession.isPlayerPresented) {
+                PresentationDemoView(session: presentationSession)
             }
         }
     }

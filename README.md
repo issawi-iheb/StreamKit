@@ -156,25 +156,77 @@ Track selection requires media to be ready (not idle, loading, or failed).
 Use `StreamVideoView` when you want to build custom controls. For Apple's standard playback interface, including system Picture in Picture and AirPlay controls where supported, use `StreamAVPlayerView`:
 
 ```swift
-@StateObject private var presentationController =
-    StreamAVPlayerPresentationController { completion in
-        // Reopen the player route, then complete after it is available.
-        completion(true)
-    }
+@StateObject private var playbackSession = PlayerPresentationSession()
 
 StreamAVPlayerView(
-    controller: controller,
-    presentationController: presentationController,
+    controller: playbackSession.playerController,
+    presentationController: playbackSession.presentationController,
     automaticallyStartsPictureInPictureWhenLeavingApp: false
 )
 .frame(height: 240)
 ```
 
-Keep `StreamAVPlayerPresentationController` in a parent that outlives the player screen. Its restoration handler must reopen that screen before calling its completion with `true`; call the completion with `false` when restoration cannot be provided. The presentation controller retains AVKit's delegate and source view controller until the PiP stop lifecycle completes.
+Keep the playback controller and presentation controller in a session object above the player route. Report restoration success only after the route appears; report failure if the host cannot restore it. The presentation controller retains AVKit's delegate and source view controller until the PiP stop lifecycle completes.
+
+```swift
+import SwiftUI
+
+@MainActor
+final class PlayerPresentationSession: ObservableObject {
+    @Published var isPlayerPresented = false
+    let playerController = StreamPlayerController()
+    private var isPlayerRouteVisible = false
+    private var restorationCompletions: [@Sendable (Bool) -> Void] = []
+
+    lazy var presentationController = StreamAVPlayerPresentationController { [weak self] completion in
+        guard let self else {
+            completion(false)
+            return
+        }
+        self.restorePlayerRoute(completion)
+    }
+
+    func restorePlayerRoute(_ completion: @escaping @Sendable (Bool) -> Void) {
+        guard !isPlayerRouteVisible else {
+            completion(true)
+            return
+        }
+
+        restorationCompletions.append(completion)
+        isPlayerPresented = true
+    }
+
+    func playerRouteDidAppear() {
+        isPlayerRouteVisible = true
+        let completions = restorationCompletions
+        restorationCompletions.removeAll()
+        completions.forEach { $0(true) }
+    }
+
+    func playerRouteDidDisappear() {
+        isPlayerRouteVisible = false
+    }
+
+    func playerRouteRestorationFailed() {
+        let completions = restorationCompletions
+        restorationCompletions.removeAll()
+        completions.forEach { $0(false) }
+    }
+}
+
+// Keep this session above the navigation destination.
+@StateObject private var playbackSession = PlayerPresentationSession()
+
+.navigationDestination(isPresented: $playbackSession.isPlayerPresented) {
+    PlayerScreen(presentationController: playbackSession.presentationController)
+        .onAppear { playbackSession.playerRouteDidAppear() }
+        .onDisappear { playbackSession.playerRouteDidDisappear() }
+}
+```
 
 Automatic PiP is opt-in and should only be enabled when the inline player is the primary content. PiP requires device support, a playback audio session, and the app's `audio` background mode. The host app owns those settings. The demo's **AVKit Player & Picture in Picture** entry lets you switch between `StreamAVPlayerView` and custom `StreamVideoView` rendering. Automatic PiP is available in the AVKit mode; custom controls can start PiP from a user action when the controller reports that PiP is possible. The standalone custom-control demo requests landscape while fullscreen is open, then restores the orientation that was active before fullscreen.
 
-For custom controls, share one `StreamPictureInPictureController` across every `StreamVideoView` rendering the same player:
+For custom controls, share one `StreamPictureInPictureController` across every `StreamVideoView` rendering the same player. Keep both it and the `StreamPlayerController` in a session owner above the player route so route removal cannot release the PiP source or playback session:
 
 ```swift
 @StateObject private var pipController = StreamPictureInPictureController()

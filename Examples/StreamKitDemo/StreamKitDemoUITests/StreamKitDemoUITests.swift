@@ -97,6 +97,68 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testPresentationRouteCanBeRemovedAndRestored() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["demo.presentation-avkit-pip"].tap()
+        let playerInterface = app.staticTexts["presentation-player-interface-ready"]
+        XCTAssertTrue(playerInterface.waitForExistence(timeout: 5))
+
+        app.navigationBars.buttons["StreamKit"].tap()
+        let presentationEntry = app.buttons["demo.presentation-avkit-pip"]
+        XCTAssertTrue(presentationEntry.waitForExistence(timeout: 5))
+
+        presentationEntry.tap()
+        XCTAssertTrue(playerInterface.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testCustomPiPContinuesAfterPlayerRouteIsRemoved() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        app.buttons["demo.presentation-avkit-pip"].tap()
+        XCTAssertTrue(
+            app.staticTexts["presentation-player-interface-ready"]
+                .waitForExistence(timeout: 5)
+        )
+
+        let rendererPicker = app.segmentedControls["presentation-renderer-picker"]
+        rendererPicker.buttons["Custom"].tap()
+
+        if app.staticTexts["presentation-pip-unsupported"].waitForExistence(timeout: 2) {
+            throw XCTSkip("Custom PiP is not supported on this device.")
+        }
+
+        let startPiP = app.buttons["presentation-start-pip"]
+        let startPredicate = NSPredicate(format: "isEnabled == true")
+        expectation(for: startPredicate, evaluatedWith: startPiP)
+        waitForExpectations(timeout: 20)
+        startPiP.tap()
+
+        let pipStatus = app.descendants(matching: .any)
+            .matching(identifier: "presentation-pip-state")
+            .firstMatch
+        let activePredicate = NSPredicate(format: "label CONTAINS %@", "Yes")
+        expectation(for: activePredicate, evaluatedWith: pipStatus)
+        waitForExpectations(timeout: 10)
+
+        app.navigationBars.buttons["StreamKit"].tap()
+        XCTAssertTrue(app.buttons["demo.presentation-avkit-pip"].waitForExistence(timeout: 5))
+
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "Custom PiP after player route removal"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+
+        let stopPiP = app.buttons["demo.stop-active-pip"]
+        XCTAssertTrue(stopPiP.waitForExistence(timeout: 5))
+        stopPiP.tap()
+        XCTAssertFalse(stopPiP.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
     func testStandalonePlayerCanEnterAndExitFullscreen() throws {
         let app = XCUIApplication()
         app.launch()
