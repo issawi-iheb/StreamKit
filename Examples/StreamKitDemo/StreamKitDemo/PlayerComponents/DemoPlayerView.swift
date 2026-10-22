@@ -8,6 +8,7 @@
 import Foundation
 import StreamKit
 import SwiftUI
+import Combine
 
 @MainActor
 struct DemoPlayerView: View {
@@ -18,13 +19,15 @@ struct DemoPlayerView: View {
     let isFullscreen: Bool
     let onFullscreen: () -> Void
 
-    @State private var controlsVisible = true
+    @Binding var controlsVisible: Bool
+    let isActiveSurface: Bool
     @State private var isSeeking = false
     @State private var seekPosition: Double = 0
 
     @State private var playbackRate: Float = 1.0
     @State private var playbackRateError: String?
     @State private var shouldResumeAfterPictureInPicture = false
+    @State private var pictureInPictureState: StreamPictureInPictureState = .idle
 
     private let playbackRates: [Float] = [
         0.5,
@@ -67,6 +70,8 @@ struct DemoPlayerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             if isFullscreen {
+                // Show controls whenever this player presentation appears.
+                controlsVisible = true
                 DemoInterfaceOrientation.requestFullscreenLandscape()
             }
         }
@@ -96,9 +101,11 @@ struct DemoPlayerView: View {
 
             await trackState.load(using: controller)
         }
-        .task(id: controlsVisible && isPlaying) {
-            guard controlsVisible,
-                  isPlaying else {
+        .task(id: controlsVisible && isPlaying && isActiveSurface) {
+            guard isActiveSurface,
+                  controlsVisible,
+                  isPlaying
+            else {
                 return
             }
 
@@ -108,7 +115,11 @@ struct DemoPlayerView: View {
                 return
             }
 
-            guard !Task.isCancelled, isPlaying else {
+            guard !Task.isCancelled,
+                  isActiveSurface,
+                  controlsVisible,
+                  isPlaying
+            else {
                 return
             }
 
@@ -116,20 +127,42 @@ struct DemoPlayerView: View {
                 controlsVisible = false
             }
         }
-        .onChange(
-            of: pictureInPictureController?.isPictureInPictureActive ?? false
-        ) { wasActive, isActive in
+        .onReceive(
+            pictureInPictureController?.$state.eraseToAnyPublisher()
+                ?? Just(.idle).eraseToAnyPublisher()
+        ) { newState in
+            let wasActive =
+                pictureInPictureState == .active ||
+                pictureInPictureState == .stopping
+
+            let isActive =
+                newState == .active ||
+                newState == .stopping
+
+            pictureInPictureState = newState
+
             if isActive {
-                shouldResumeAfterPictureInPicture =
-                    controller.snapshot.intent == .play &&
-                    (
-                        controller.snapshot.phase == .playing ||
-                        controller.snapshot.phase == .waiting
-                    )
+                if !wasActive {
+                    shouldResumeAfterPictureInPicture =
+                        controller.snapshot.intent == .play &&
+                        (
+                            controller.snapshot.phase == .playing ||
+                            controller.snapshot.phase == .waiting
+                        )
+                }
                 return
             }
 
-            guard wasActive, shouldResumeAfterPictureInPicture else {
+            // Only handle the transition from an active PiP session to idle.
+            guard wasActive else {
+                return
+            }
+
+            withAnimation(.easeInOut(duration: 0.2)) {
+                controlsVisible = true
+            }
+
+            guard shouldResumeAfterPictureInPicture else {
                 return
             }
 
@@ -143,10 +176,8 @@ struct DemoPlayerView: View {
                 do {
                     try await controller.play()
                 } catch is CancellationError {
-                    // The task was cancelled; no further action is needed.
+                    // Cancellation is expected during task teardown.
                 } catch {
-                    // Playback could not resume. The controller reports its
-                    // playback failure through its normal state/event handling.
                     print("Failed to resume playback after PiP: \(error)")
                 }
             }
@@ -164,25 +195,16 @@ struct DemoPlayerView: View {
 
             ZStack {
                 Color.black
-                if !isFullscreen &&
-                    pictureInPictureController?.isPictureInPictureActive == true {
-                    Color.black
-                        .contentShape(Rectangle())
-                        .zIndex(1)
-                }
 
-
-                if pictureInPictureController?.isPictureInPictureActive != true {
-                    StreamVideoView(
-                        controller: controller,
-                        pictureInPictureController: pictureInPictureController
-                    )
-                    .frame(
-                        width: geometry.size.width,
-                        height: geometry.size.height
-                    )
-                }
-
+                StreamVideoView(
+                    controller: controller,
+                    pictureInPictureController: pictureInPictureController
+                )
+                .frame(
+                    width: geometry.size.width,
+                    height: geometry.size.height
+                )
+                .allowsHitTesting(false)
 
                 if snapshot.phase == .waiting {
                     ProgressView()
@@ -244,7 +266,8 @@ struct DemoPlayerView: View {
                     .zIndex(1)
 
                 if controlsVisible &&
-                        pictureInPictureController?.isPictureInPictureActive != true {
+                    pictureInPictureState != .active &&
+                           pictureInPictureState != .stopping {
                     controlsOverlay(
                         width: width,
                         height: geometry.size.height,

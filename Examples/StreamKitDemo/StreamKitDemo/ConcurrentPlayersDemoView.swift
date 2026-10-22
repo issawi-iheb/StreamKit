@@ -17,6 +17,7 @@ struct ConcurrentPlayersDemoView: View {
     @State private var secondTrackState = PlayerTrackState()
     @State private var isFirstPlayerFullscreen = false
     @State private var isSecondPlayerFullscreen = false
+    @State private var controlsVisible = true
     @State private var firstSnapshot = PlaybackSnapshot(
         phase: .idle,
         intent: .pause
@@ -114,7 +115,9 @@ struct ConcurrentPlayersDemoView: View {
                 isFullscreen: true,
                 onFullscreen: {
                     isFirstPlayerFullscreen = false
-                }
+                },
+                controlsVisible: $controlsVisible,
+                isActiveSurface: !isFirstPlayerFullscreen
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.black)
@@ -128,7 +131,9 @@ struct ConcurrentPlayersDemoView: View {
                 isFullscreen: true,
                 onFullscreen: {
                     isSecondPlayerFullscreen = false
-                }
+                },
+                controlsVisible: $controlsVisible,
+                isActiveSurface: !isSecondPlayerFullscreen
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.black)
@@ -155,7 +160,9 @@ struct ConcurrentPlayersDemoView: View {
                 isFullscreen: false,
                 onFullscreen: {
                     isFullscreen.wrappedValue = true
-                }
+                },
+                controlsVisible: $controlsVisible,
+                isActiveSurface: !isFullscreen.wrappedValue
             )
             .clipShape(RoundedRectangle(cornerRadius: 12))
 

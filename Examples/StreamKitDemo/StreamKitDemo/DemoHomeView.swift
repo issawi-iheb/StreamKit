@@ -12,6 +12,8 @@ struct DemoHomeView: View {
     @StateObject private var presentationSession = PresentationDemoSession()
     @StateObject private var standalonePlayerSession = StandalonePlayerDemoSession()
 
+    @State private var isStandalonePlayerPresented = false
+
     var body: some View {
         NavigationStack {
             List {
@@ -27,8 +29,8 @@ struct DemoHomeView: View {
                     }
                     .accessibilityIdentifier("demo.audio-session")
 
-                    NavigationLink {
-                        StandalonePlayerDemoView(session: standalonePlayerSession)
+                    Button {
+                        isStandalonePlayerPresented = true
                     } label: {
                         DemoNavigationRow(
                             title: "Standalone Player",
@@ -36,6 +38,7 @@ struct DemoHomeView: View {
                             symbol: "play.rectangle"
                         )
                     }
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("demo.standalone-player")
 
                     NavigationLink {
@@ -117,8 +120,22 @@ struct DemoHomeView: View {
                 }
             }
             .navigationTitle("StreamKit")
-            .navigationDestination(isPresented: $presentationSession.isPlayerPresented) {
+            .navigationDestination(
+                isPresented: $isStandalonePlayerPresented
+            ) {
+                StandalonePlayerDemoView(
+                    session: standalonePlayerSession
+                )
+            }
+            .navigationDestination(
+                isPresented: $presentationSession.isPlayerPresented
+            ) {
                 PresentationDemoView(session: presentationSession)
+            }
+        }
+        .onAppear {
+            standalonePlayerSession.requestPlayerRoute = {
+                isStandalonePlayerPresented = true
             }
         }
     }

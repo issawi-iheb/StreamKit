@@ -6,9 +6,11 @@ import SwiftUI
 @MainActor
 final class StandalonePlayerDemoSession: ObservableObject {
     @Published private(set) var playerController = StreamPlayerController()
-    @Published private(set) var pictureInPictureController = StreamPictureInPictureController()
+    @Published private(set) var pictureInPictureController:
+        StreamPictureInPictureController
     @Published private(set) var snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
     @Published private(set) var errorMessage: String?
+    private let restorationCoordinator = PresentationDemoRestorationCoordinator()
 
     let trackState = PlayerTrackState()
 
@@ -23,10 +25,20 @@ final class StandalonePlayerDemoSession: ObservableObject {
     private var loadHandle: LoadHandle?
     private var loadTask: Task<Void, Never>?
     private var snapshotTask: Task<Void, Never>?
-    private var pictureInPictureObservation: AnyCancellable?
+    var requestPlayerRoute: (@MainActor () -> Void)?
 
     init() {
-        observePictureInPictureState()
+        let restorationCoordinator = self.restorationCoordinator
+
+        self.pictureInPictureController = StreamPictureInPictureController(
+            restorationHandler: { completion in
+                restorationCoordinator.restorePlayerInterface(completion)
+            }
+        )
+
+        restorationCoordinator.requestPlayerRoute = { [weak self] in
+            self?.requestPlayerRoute?()
+        }
     }
 
     func playerRouteDidAppear() {
@@ -43,24 +55,21 @@ final class StandalonePlayerDemoSession: ObservableObject {
 
     func playerRouteDidDisappear() {
         isPlayerRouteVisible = false
-        guard pictureInPictureController.state == .idle else { return }
-        Task { [weak self] in
-            await self?.shutdownIfRouteAndPiPAreInactive()
-        }
-    }
 
-    private func observePictureInPictureState() {
-        pictureInPictureObservation = pictureInPictureController.$state
-            .removeDuplicates()
-            .sink { [weak self] state in
-                guard state == .idle else { return }
-                Task { @MainActor [weak self] in
-                    guard let self,
-                          self.hasPresentedPlayerRoute,
-                          !self.isPlayerRouteVisible else { return }
-                    await self.shutdownIfRouteAndPiPAreInactive()
-                }
+        // Keep the playback controller alive while PiP or restoration
+        // may still depend on the existing playback session.
+        guard pictureInPictureController.state == .idle else { return }
+
+        Task { @MainActor [weak self] in
+            guard let self,
+                  !self.isPlayerRouteVisible,
+                  self.pictureInPictureController.state == .idle
+            else {
+                return
             }
+
+            await self.playerController.pause()
+        }
     }
 
     private func observeSnapshots() {
@@ -142,21 +151,42 @@ final class StandalonePlayerDemoSession: ObservableObject {
 
     private func createFreshSession() {
         sessionGeneration = UUID()
-        pictureInPictureObservation?.cancel()
+
         snapshotTask?.cancel()
         loadTask?.cancel()
         loadHandle?.cancel()
+
         snapshotTask = nil
         loadTask = nil
         loadHandle = nil
 
         playerController = StreamPlayerController()
-        pictureInPictureController = StreamPictureInPictureController()
+        pictureInPictureController = makePictureInPictureController()
+
         snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
         errorMessage = nil
         trackState.prepareForNewSource()
+
         isShutdown = false
         isShuttingDown = false
-        observePictureInPictureState()
+    }
+
+    func playerInterfaceDidAppear() {
+        restorationCoordinator.playerInterfaceDidAppear()
+    }
+
+    func playerInterfaceDidDisappear() {
+        restorationCoordinator.playerInterfaceDidDisappear()
+    }
+
+    private func makePictureInPictureController()
+        -> StreamPictureInPictureController {
+        let coordinator = restorationCoordinator
+
+        return StreamPictureInPictureController(
+            restorationHandler: { completion in
+                coordinator.restorePlayerInterface(completion)
+            }
+        )
     }
 }

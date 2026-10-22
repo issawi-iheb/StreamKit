@@ -18,6 +18,9 @@ final class MockPlaybackEngine: PlaybackEngine {
     private(set) var pauseCallCount = 0
     private var shouldSuspendNextPlay = false
     private var pendingPlay: CheckedContinuation<Void, Error>?
+    private var pendingPlayRegistrationWaiters: [
+        CheckedContinuation<Void, Never>
+    ] = []
     private var registeredLoadIDs: Set<Int> = []
     private var loadRegistrationWaiters: [
         Int: [CheckedContinuation<Void, Never>]
@@ -156,27 +159,84 @@ final class MockPlaybackEngine: PlaybackEngine {
     }
 
     func waitForPendingPlay() async {
-        for _ in 0..<100 where pendingPlay == nil {
-            await Task.yield()
+        guard pendingPlay == nil else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            // Recheck after entering the continuation closure.
+            // MainActor isolation makes this registration atomic
+            // relative to other operations on this mock.
+            guard pendingPlay == nil else {
+                continuation.resume()
+                return
+            }
+
+            pendingPlayRegistrationWaiters.append(continuation)
         }
     }
 
     func failPendingPlay(with error: Error) {
-        pendingPlay?.resume(throwing: error)
+        guard let continuation = pendingPlay else {
+            return
+        }
+
         pendingPlay = nil
+        continuation.resume(throwing: error)
+    }
+
+    func completePendingPlay() {
+        guard let continuation = pendingPlay else {
+            return
+        }
+
+        pendingPlay = nil
+        continuation.resume()
+    }
+
+    private func cancelPendingPlay() {
+        failPendingPlay(with: CancellationError())
+    }
+
+    private func resumePendingPlayRegistrationWaiters() {
+        let waiters = pendingPlayRegistrationWaiters
+        pendingPlayRegistrationWaiters.removeAll()
+
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
 
     // MARK: - PlaybackEngine
 
     func play() async throws {
         playCallCount += 1
-        guard shouldSuspendNextPlay else { return }
-        shouldSuspendNextPlay = false
-        try await withCheckedThrowingContinuation { continuation in
-            pendingPlay = continuation
+
+        guard shouldSuspendNextPlay else {
+            return
         }
-        // Intentionally emit no event.
-        // Tests must explicitly control when playback events occur.
+
+        shouldSuspendNextPlay = false
+
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
+
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+
+                pendingPlay = continuation
+                resumePendingPlayRegistrationWaiters()
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelPendingPlay()
+            }
+        }
+
+        // Tests explicitly control when playback events occur.
     }
 
     func pause() async {
@@ -192,38 +252,80 @@ final class MockPlaybackEngine: PlaybackEngine {
         let seekID = nextSeekID
 
         seekTimes.append(time)
-        registeredSeekIDs.insert(seekID)
 
-        let waiters = seekRegistrationWaiters.removeValue(forKey: seekID) ?? []
-        for waiter in waiters {
-            waiter.resume()
-        }
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
 
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
 
-            pendingSeeks[seekID] = continuation
+                pendingSeeks[seekID] = continuation
+                registeredSeekIDs.insert(seekID)
+
+                let waiters =
+                    seekRegistrationWaiters.removeValue(forKey: seekID) ?? []
+
+                for waiter in waiters {
+                    waiter.resume()
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelSeek(id: seekID)
+            }
         }
     }
 
+    private func cancelSeek(id: Int) {
+        guard let continuation = pendingSeeks.removeValue(forKey: id) else {
+            return
+        }
+
+        continuation.resume(throwing: CancellationError())
+    }
+
+
     func shutdown() async {
-        pendingPlay?.resume(throwing: CancellationError())
-        pendingPlay = nil
+        // Cancel pending play.
+        cancelPendingPlay()
+        resumePendingPlayRegistrationWaiters()
 
-        for continuation in pendingLoads.values {
-            continuation.resume(throwing: CancellationError())
-        }
-
+        // Cancel pending loads.
+        let loads = pendingLoads.values
         pendingLoads.removeAll()
-        continuation.finish()
 
-        for waiters in loadRegistrationWaiters.values {
-            for waiter in waiters {
-                waiter.resume()
-            }
+        for load in loads {
+            load.resume(throwing: CancellationError())
         }
 
+        // Cancel pending seeks.
+        let seeks = pendingSeeks.values
+        pendingSeeks.removeAll()
+
+        for seek in seeks {
+            seek.resume(throwing: CancellationError())
+        }
+
+        // Release load-registration waiters.
+        let loadWaiters = loadRegistrationWaiters.values.flatMap { $0 }
         loadRegistrationWaiters.removeAll()
+
+        for waiter in loadWaiters {
+            waiter.resume()
+        }
+
+        // Release seek-registration waiters.
+        let seekWaiters = seekRegistrationWaiters.values.flatMap { $0 }
+        seekRegistrationWaiters.removeAll()
+
+        for waiter in seekWaiters {
+            waiter.resume()
+        }
+
+        continuation.finish()
     }
 
     func availableAudioTracks() async throws -> [MediaTrack] {

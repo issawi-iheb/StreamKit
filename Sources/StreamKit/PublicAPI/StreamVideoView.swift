@@ -144,16 +144,18 @@ private final class PlayerLayerUIView: UIView {
         let isPictureInPictureSessionInProgress =
             pictureInPictureController?.isPictureInPictureSessionInProgress == true
 
-        // Setting this to nil invokes didSet, which unregisters the layer once.
-        pictureInPictureController = nil
         pictureInPictureStateObservation?.cancel()
         pictureInPictureStateObservation = nil
 
-        // Keep the PiP source layer and its player connection intact until AVKit
-        // confirms that the active PiP session has stopped.
-        if !isPictureInPictureSessionInProgress {
-            player = nil
+        if isPictureInPictureSessionInProgress {
+            // The PiP controller must retain ownership of its source layer
+            // until AVKit confirms that the session has stopped.
+            return
         }
+
+        pictureInPictureController?.detach(from: playerLayer)
+        pictureInPictureController = nil
+        player = nil
     }
 }
 
