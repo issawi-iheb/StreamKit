@@ -179,13 +179,15 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     /// Unregisters a surface. A PiP-owned controller is preserved until the
     /// transition/session ends, even if SwiftUI dismantles its source view.
     func detach(from layer: AVPlayerLayer) {
-        unregister(layer)
-
-        guard attachedLayer === layer else {
+        if isPictureInPictureSessionInProgress,
+           attachedLayer === layer {
+            // Preserve the active PiP source until AVKit confirms the stop.
             return
         }
 
-        if isPictureInPictureSessionInProgress {
+        unregister(layer)
+
+        guard attachedLayer === layer else {
             return
         }
 

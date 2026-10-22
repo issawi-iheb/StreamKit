@@ -193,7 +193,9 @@ struct PresentationDemoView: View {
             session.playerInterfaceDidAppear()
         }
         .onDisappear {
-            session.playerInterfaceDidDisappear()
+            session.playerInterfaceDidDisappear(
+                isFullscreenPresented: isFullscreenPresented
+            )
         }
         .fullScreenCover(isPresented: $isFullscreenPresented) {
             FullscreenDemoPlayerView(

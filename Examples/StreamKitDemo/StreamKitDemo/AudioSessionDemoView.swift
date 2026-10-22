@@ -16,6 +16,7 @@ struct AudioSessionDemoView: View {
     @State private var trackState = PlayerTrackState()
     @State private var errorMessage: String?
     @State private var isFullscreen = false
+    @State private var controlsVisible = true
 
     private let sourceURL = URL(
         string: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
@@ -31,7 +32,9 @@ struct AudioSessionDemoView: View {
                     isFullscreen: false,
                     onFullscreen: {
                         isFullscreen = true
-                    }
+                    },
+                    controlsVisible: $controlsVisible,
+                    isActiveSurface: !isFullscreen
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
@@ -89,7 +92,9 @@ struct AudioSessionDemoView: View {
                 isFullscreen: true,
                 onFullscreen: {
                     isFullscreen = false
-                }
+                },
+                controlsVisible: $controlsVisible,
+                isActiveSurface: !isFullscreen
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.black)

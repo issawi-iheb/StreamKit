@@ -14,6 +14,7 @@ import StreamKit
 struct StandalonePlayerDemoView: View {
     @ObservedObject var session: StandalonePlayerDemoSession
     @State private var isFullscreen = false
+    @State private var controlsVisible = true
 
     var body: some View {
         NavigationStack {
@@ -27,7 +28,9 @@ struct StandalonePlayerDemoView: View {
                         isFullscreen: false,
                         onFullscreen: {
                             isFullscreen = true
-                        }
+                        },
+                        controlsVisible: $controlsVisible,
+                        isActiveSurface: !isFullscreen
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
@@ -67,7 +70,9 @@ struct StandalonePlayerDemoView: View {
                 isFullscreen: true,
                 onFullscreen: {
                     isFullscreen = false
-                }
+                },
+                controlsVisible: $controlsVisible,
+                isActiveSurface: !isFullscreen
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.black)
@@ -75,11 +80,13 @@ struct StandalonePlayerDemoView: View {
         }
         .onAppear {
             session.playerRouteDidAppear()
+            session.playerInterfaceDidAppear()
         }
         .onDisappear {
-            if !isFullscreen {
-                session.playerRouteDidDisappear()
-            }
+            guard !isFullscreen else { return }
+
+            session.playerInterfaceDidDisappear()
+            session.playerRouteDidDisappear()
         }
     }
 }

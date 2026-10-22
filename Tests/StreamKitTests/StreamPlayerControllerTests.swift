@@ -150,6 +150,37 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("Waiting for pending play resumes when play registers")
+    func waitForPendingPlayResumesAfterRegistration() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        engine.suspendNextPlay()
+
+        let playTask = Task {
+            try await controller.play()
+        }
+
+        await engine.waitForPendingPlay()
+
+        #expect(engine.playCallCount == 1)
+
+        engine.completePendingPlay()
+        try await playTask.value
+
+        await controller.shutdown()
+    }
+
     @Test("A late play failure from a replaced source cannot fail the new source")
     func latePlayFailureDoesNotFailReplacementSource() async throws {
         let engine = MockPlaybackEngine()
@@ -773,6 +804,44 @@ struct StreamPlayerControllerTests {
 
         #expect(controller.snapshot.phase == .idle)
     }
+
+    @Test("Shutdown cancels a suspended seek")
+    func shutdownDuringSuspendedSeekCancelsSeek() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.mp4")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        let seekTask = Task {
+            try await controller.seek(to: 42)
+        }
+
+        await engine.waitForSeek(id: 1)
+        #expect(engine.seekTimes == [42])
+
+        await controller.shutdown()
+
+        do {
+            try await seekTask.value
+            Issue.record("The seek unexpectedly succeeded after shutdown.")
+        } catch is CancellationError {
+            // Expected: shutdown cancelled the pending seek.
+        } catch {
+            Issue.record("Expected CancellationError, got: \(error)")
+        }
+
+        #expect(controller.snapshot.phase == .idle)
+        #expect(controller.snapshot.intent == .pause)
+    }
+
 
     @Test("Pausing updates the snapshot to paused")
     func pauseUpdatesSnapshot() async throws {

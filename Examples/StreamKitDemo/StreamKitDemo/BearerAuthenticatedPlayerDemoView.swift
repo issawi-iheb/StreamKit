@@ -12,6 +12,8 @@ struct BearerAuthenticatedPlayerDemoView: View {
     @State private var bearerToken = ""
     @State private var errorMessage: String?
     @State private var isLoading = false
+    @State private var isFullscreen = false
+    @State private var controlsVisible = true
 
     var body: some View {
         ScrollView {
@@ -61,7 +63,9 @@ struct BearerAuthenticatedPlayerDemoView: View {
                     snapshot: snapshot,
                     trackState: trackState,
                     isFullscreen: false,
-                    onFullscreen: {}
+                    onFullscreen: {},
+                    controlsVisible: $controlsVisible,
+                    isActiveSurface: !isFullscreen
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 

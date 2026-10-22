@@ -45,18 +45,21 @@ final class PresentationDemoSession: ObservableObject {
         restorationCoordinator.playerInterfaceDidAppear()
     }
 
-    func playerInterfaceDidDisappear() {
+
+    func playerInterfaceDidDisappear(isFullscreenPresented: Bool = false) {
         restorationCoordinator.playerInterfaceDidDisappear()
 
-        // Keep playback alive only while either PiP implementation owns the
-        // presentation. Leaving the demo route for the menu should stop the
-        // underlying stream once there is no PiP session to preserve.
+        // A fullscreen player is still an active playback interface.
+        guard !isFullscreenPresented else { return }
+
         Task { [weak self] in
             guard let self else { return }
+
             guard pictureInPictureController.state == .idle,
                   systemPresentationController.state == .idle else {
                 return
             }
+
             await playerController.pause()
         }
     }

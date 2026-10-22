@@ -15,6 +15,7 @@ struct FairPlayIntegrationDemoView: View {
     @State private var errorMessage: String?
     @State private var diagnostics = FairPlayDemoDiagnostics()
     @State private var didCopyDiagnostics = false
+    @State private var controlsVisible = true
 
     @State private var streamURL = "https://media.axprod.net/TestVectors/Hls/protected_hls_1080p_h264_singlekey/manifest.m3u8"
     @State private var certificateURL = "https://tools.axinom.com/FPScert/fairplay.cer"
@@ -34,7 +35,9 @@ struct FairPlayIntegrationDemoView: View {
                     snapshot: snapshot,
                     trackState: trackState,
                     isFullscreen: false,
-                    onFullscreen: { isFullscreen = true }
+                    onFullscreen: { isFullscreen = true },
+                    controlsVisible: $controlsVisible,
+                    isActiveSurface: !isFullscreen
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
@@ -134,7 +137,9 @@ struct FairPlayIntegrationDemoView: View {
                 snapshot: snapshot,
                 trackState: trackState,
                 isFullscreen: true,
-                onFullscreen: { isFullscreen = false }
+                onFullscreen: { isFullscreen = false },
+                controlsVisible: $controlsVisible,
+                isActiveSurface: !isFullscreen
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.black)
