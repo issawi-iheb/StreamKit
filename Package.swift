@@ -16,6 +16,7 @@ let package = Package(
     targets: [
         .target(
             name: "StreamKit",
+            sources: ["PlaybackCore", "PublicAPI", "InternalSupport"],
             swiftSettings: [
                 .enableUpcomingFeature("ApproachableConcurrency")
             ]

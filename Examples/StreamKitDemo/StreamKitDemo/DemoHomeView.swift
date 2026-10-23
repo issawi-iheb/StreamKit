@@ -19,6 +19,17 @@ struct DemoHomeView: View {
             List {
                 Section("Playback") {
                     NavigationLink {
+                        LiveDVRDemoView()
+                    } label: {
+                        DemoNavigationRow(
+                            title: "Live & DVR Playback",
+                            subtitle: "Inspect seekable ranges and seek behind live",
+                            symbol: "dot.radiowaves.left.and.right"
+                        )
+                    }
+                    .accessibilityIdentifier("demo.live-dvr")
+
+                    NavigationLink {
                         AudioSessionDemoView()
                     } label: {
                         DemoNavigationRow(
@@ -48,16 +59,6 @@ struct DemoHomeView: View {
                             title: "Concurrent Players",
                             subtitle: "Independent playback across multiple players",
                             symbol: "rectangle.split.2x1"
-                        )
-                    }
-
-                    NavigationLink {
-                        PlaylistDemoView()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Playlist",
-                            subtitle: "Planned demo — not implemented yet.",
-                            symbol: "list.bullet.rectangle"
                         )
                     }
                 }
@@ -107,17 +108,6 @@ struct DemoHomeView: View {
                     .accessibilityIdentifier("demo.axinom-fairplay")
                 }
 
-                Section("SDK") {
-                    NavigationLink {
-                        PlaybackEventsDemoView()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Playback Events",
-                            subtitle: "Planned demo — not implemented yet.",
-                            symbol: "waveform.path"
-                        )
-                    }
-                }
             }
             .navigationTitle("StreamKit")
             .navigationDestination(

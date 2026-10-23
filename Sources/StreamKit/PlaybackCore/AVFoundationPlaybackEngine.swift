@@ -33,6 +33,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     private var timeObserverToken: Any?
     private var itemEndObserver: NSObjectProtocol?
     private var itemFailureObserver: NSObjectProtocol?
+    private var pausedLiveTimelineTimer: Timer?
 
     // Current item identity and generation.
     private var observedItem: AVPlayerItem?
@@ -47,6 +48,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
     private var isShutdown = false
     private var playbackRate: Float = 1.0
+    private let keepsLiveTimelineCurrentWhilePaused: Bool
 
     var events: AsyncStream<PlaybackEngineEventEnvelope> {
         eventStream
@@ -54,7 +56,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
     // MARK: - Initialization
 
-    init() {
+    init(keepsLiveTimelineCurrentWhilePaused: Bool = false) {
         let stream = AsyncStream<PlaybackEngineEventEnvelope>.makeStream(
             bufferingPolicy: .unbounded
         )
@@ -62,6 +64,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         self.player = AVPlayer()
         self.eventStream = stream.stream
         self.eventContinuation = stream.continuation
+        self.keepsLiveTimelineCurrentWhilePaused = keepsLiveTimelineCurrentWhilePaused
     }
 
     // MARK: - Loading
@@ -71,12 +74,10 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             throw shutdownFailure()
         }
 
-        if source.requestConfiguration.fairPlay != nil,
-           source.url.scheme?.lowercased() != "https" {
-            throw PlaybackFailure(
-                code: .unsupportedConfiguration,
-                message: "FairPlay-protected media must use HTTPS."
-            )
+        try Task.checkCancellation()
+
+        guard sourceGeneration > activeSourceGeneration else {
+            throw CancellationError()
         }
 
         activeSourceGeneration = sourceGeneration
@@ -90,79 +91,26 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         authenticatedResourceLoader = nil
         fairPlayContentKeySession?.invalidate()
         fairPlayContentKeySession = nil
-        loadGeneration = engineGeneration
         cancelPendingReadiness()
         player.pause()
         player.replaceCurrentItem(with: nil)
 
-        var assetOptions: [String: Any] = [:]
-        let request = source.requestConfiguration
-        if let userAgent = request.userAgent, !userAgent.isEmpty {
-            if #available(iOS 16.0, macOS 13.0, tvOS 16.0, *) {
-                assetOptions[AVURLAssetHTTPUserAgentKey] = userAgent
-            } else {
-                throw PlaybackFailure(
-                    code: .unsupportedConfiguration,
-                    message: "A custom User-Agent requires a newer operating system."
-                )
-            }
+        let preparedItem = try AVFoundationPlaybackItemFactory.make(from: source)
+        authenticatedResourceLoader = preparedItem.authenticatedResourceLoader
+        fairPlayContentKeySession = preparedItem.fairPlayContentKeySession
+        let item = preparedItem.item
+        if source.presentationKind == .live,
+           keepsLiveTimelineCurrentWhilePaused {
+            item.canUseNetworkResourcesForLiveStreamingWhilePaused = true
         }
-        if !request.cookies.isEmpty {
-            let cookies = request.cookies.compactMap { value in
-                HTTPCookie(properties: [
-                    .name: value.name,
-                    .value: value.value,
-                    .domain: value.domain,
-                    .path: value.path,
-                    .secure: value.isSecure ? "TRUE" : "FALSE"
-                ])
-            }
-            guard cookies.count == request.cookies.count else {
-                throw PlaybackFailure(
-                    code: .unsupportedConfiguration,
-                    message: "One or more media cookies are invalid."
-                )
-            }
-            assetOptions[AVURLAssetHTTPCookiesKey] = cookies
-        }
-
-        let assetURL: URL
-        if let authentication = request.bearerAuthentication {
-            guard authentication.trusts(source.url) else {
-                throw PlaybackFailure(
-                    code: .unsupportedConfiguration,
-                    message: "Bearer authentication must trust the media URL host."
-                )
-            }
-            assetURL = try AuthenticatedMediaResourceLoader.assetURL(for: source.url)
-            let resourceLoader = AuthenticatedMediaResourceLoader(
-                authentication: authentication,
-                cookies: request.cookies,
-                userAgent: request.userAgent
-            )
-            authenticatedResourceLoader = resourceLoader
-            let asset = AVURLAsset(url: assetURL, options: assetOptions)
-            asset.resourceLoader.setDelegate(resourceLoader, queue: resourceLoader.delegateQueue)
-            let item = AVPlayerItem(asset: asset)
-            configureFairPlay(for: asset, configuration: request.fairPlay)
-            observedItem = item
-            player.replaceCurrentItem(with: item)
-
-            installPlaybackObservers(for: item, generation: engineGeneration)
-            try await waitForReadiness(of: item, generation: engineGeneration)
-            return
-        } else {
-            assetURL = source.url
-        }
-
-        let asset = AVURLAsset(url: assetURL, options: assetOptions)
-        let item = AVPlayerItem(asset: asset)
-        configureFairPlay(for: asset, configuration: request.fairPlay)
-
         observedItem = item
         player.replaceCurrentItem(with: item)
 
-        installPlaybackObservers(for: item, generation: engineGeneration)
+        installPlaybackObservers(
+            for: item,
+            generation: engineGeneration,
+            presentationKind: source.presentationKind
+        )
         try await waitForReadiness(of: item, generation: engineGeneration)
     }
 
@@ -226,16 +174,6 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         fairPlayContentKeySession = nil
         player.pause()
         player.replaceCurrentItem(with: nil)
-    }
-
-    private func configureFairPlay(
-        for asset: AVURLAsset,
-        configuration: FairPlayConfiguration?
-    ) {
-        guard let configuration else { return }
-        let contentKeySession = FairPlayContentKeySession(configuration: configuration)
-        fairPlayContentKeySession = contentKeySession
-        contentKeySession.addRecipient(asset)
     }
 
     private func handleItemStatus(
@@ -335,7 +273,8 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
     private func installPlaybackObservers(
         for item: AVPlayerItem,
-        generation: UInt64
+        generation: UInt64,
+        presentationKind: MediaPresentationKind
     ) {
         // Observe AVPlayer playback state.
         timeControlStatusObservation = player.observe(
@@ -371,6 +310,23 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
             let currentTime = time.seconds
             let duration = item.duration.seconds
+            let seekableRanges = item.seekableTimeRanges.compactMap {
+                value -> PlaybackTimeRange? in
+                let range = value.timeRangeValue
+                let start = range.start.seconds
+                let end = CMTimeRangeGetEnd(range).seconds
+
+                guard start.isFinite, end.isFinite, end >= start else {
+                    return nil
+                }
+
+                return PlaybackTimeRange(start: start, end: end)
+            }
+            let timeline = PlaybackTimeline(
+                seekableRanges: seekableRanges,
+                currentDate: item.currentDate(),
+                presentationKind: presentationKind
+            )
 
             Task { @MainActor [weak self, weak item] in
                 guard let self, let item,
@@ -388,7 +344,8 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
                 self.emit(
                     .timeUpdated(
                         currentTime: currentTime,
-                        duration: validDuration
+                        duration: validDuration,
+                        timeline: timeline
                     )
                 )
             }
@@ -446,6 +403,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
         switch status {
         case .playing:
+            stopPausedLiveTimelineUpdates()
         // Apply the selected rate once playback has actually started.
         // This also supports platforms where defaultRate is unavailable.
             if player.rate != playbackRate {
@@ -455,6 +413,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             emit(.playing)
 
         case .waitingToPlayAtSpecifiedRate:
+            stopPausedLiveTimelineUpdates()
             emit(.waiting)
 
         case .paused:
@@ -462,10 +421,61 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             // Do not publish that transport state until readiness is known.
             guard item.status == .readyToPlay else { return }
             emit(.paused)
+            startPausedLiveTimelineUpdates(for: item, generation: generation)
 
         @unknown default:
             break
         }
+    }
+
+    private func startPausedLiveTimelineUpdates(
+        for item: AVPlayerItem,
+        generation: UInt64
+    ) {
+        guard keepsLiveTimelineCurrentWhilePaused,
+              item.canUseNetworkResourcesForLiveStreamingWhilePaused,
+              pausedLiveTimelineTimer == nil else {
+            return
+        }
+
+        pausedLiveTimelineTimer = Timer.scheduledTimer(
+            withTimeInterval: 1,
+            repeats: true
+        ) { [weak self, weak item] _ in
+            Task { @MainActor [weak self, weak item] in
+                guard let self, let item,
+                      self.player.timeControlStatus == .paused,
+                      self.isCurrentItem(item, generation: generation) else {
+                    return
+                }
+
+                self.emit(.timelineUpdated(self.timeline(for: item, presentationKind: .live)))
+            }
+        }
+    }
+
+    private func stopPausedLiveTimelineUpdates() {
+        pausedLiveTimelineTimer?.invalidate()
+        pausedLiveTimelineTimer = nil
+    }
+
+    private func timeline(
+        for item: AVPlayerItem,
+        presentationKind: MediaPresentationKind
+    ) -> PlaybackTimeline {
+        let seekableRanges = item.seekableTimeRanges.compactMap { value -> PlaybackTimeRange? in
+            let range = value.timeRangeValue
+            let start = range.start.seconds
+            let end = CMTimeRangeGetEnd(range).seconds
+
+            guard start.isFinite, end.isFinite, end >= start else { return nil }
+            return PlaybackTimeRange(start: start, end: end)
+        }
+        return PlaybackTimeline(
+            seekableRanges: seekableRanges,
+            currentDate: item.currentDate(),
+            presentationKind: presentationKind
+        )
     }
 
     private func isCurrentItem(
@@ -506,6 +516,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     // MARK: - Observer Cleanup
 
     private func removePlaybackObservers() {
+        stopPausedLiveTimelineUpdates()
         timeControlStatusObservation?.invalidate()
         timeControlStatusObservation = nil
 
@@ -530,12 +541,14 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     // MARK: - Media Tracks
 
     func availableAudioTracks() async throws -> [MediaTrack] {
+        try Task.checkCancellation()
         let item = try currentTrackItem()
         let generation = loadGeneration
         let asset = item.asset
 
         let group = try await asset.loadMediaSelectionGroup(for: .audible)
 
+        try Task.checkCancellation()
         guard isCurrentItem(item, generation: generation) else {
             throw CancellationError()
         }
@@ -555,12 +568,14 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     }
 
     func availableSubtitleTracks() async throws -> [MediaTrack] {
+        try Task.checkCancellation()
         let item = try currentTrackItem()
         let generation = loadGeneration
         let asset = item.asset
 
         let group = try await asset.loadMediaSelectionGroup(for: .legible)
 
+        try Task.checkCancellation()
         guard isCurrentItem(item, generation: generation) else {
             throw CancellationError()
         }
@@ -580,12 +595,14 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     }
 
     func selectAudioTrack(id: String) async throws {
+        try Task.checkCancellation()
         let item = try currentTrackItem()
         let generation = loadGeneration
         let asset = item.asset
 
         let group = try await asset.loadMediaSelectionGroup(for: .audible)
 
+        try Task.checkCancellation()
         guard isCurrentItem(item, generation: generation) else {
             throw CancellationError()
         }
@@ -606,12 +623,14 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     }
 
     func selectSubtitleTrack(id: String?) async throws {
+        try Task.checkCancellation()
         let item = try currentTrackItem()
         let generation = loadGeneration
         let asset = item.asset
 
         let group = try await asset.loadMediaSelectionGroup(for: .legible)
 
+        try Task.checkCancellation()
         guard isCurrentItem(item, generation: generation) else {
             throw CancellationError()
         }
@@ -746,6 +765,42 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
             toleranceBefore: .zero,
             toleranceAfter: .zero
         )
+
+        guard isCurrentItem(item, generation: generation) else {
+            throw CancellationError()
+        }
+
+        guard completed else {
+            throw CancellationError()
+        }
+    }
+
+    func seekToLiveEdge(offsetFromLive: TimeInterval) async throws {
+        guard !isShutdown else {
+            throw shutdownFailure()
+        }
+
+        guard offsetFromLive.isFinite, offsetFromLive >= 0 else {
+            throw PlaybackFailure(
+                code: .invalidSource,
+                message: "The live offset must be finite and non-negative."
+            )
+        }
+
+        guard let item = player.currentItem else {
+            throw PlaybackFailure(
+                code: .invalidSource,
+                message: "Load a live media source before seeking to its live edge."
+            )
+        }
+
+        let generation = loadGeneration
+        item.configuredTimeOffsetFromLive = CMTime(
+            seconds: offsetFromLive,
+            preferredTimescale: 600
+        )
+
+        let completed = await player.seek(to: .positiveInfinity)
 
         guard isCurrentItem(item, generation: generation) else {
             throw CancellationError()

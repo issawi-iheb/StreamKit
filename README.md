@@ -18,6 +18,15 @@ The package declares iOS 16 support. The demo project currently targets iOS 26.5
 3. Choose the `StreamKit` package product
 4. Add to your target
 
+## Choose Your Player Surface
+
+StreamKit offers two rendering paths for the same playback controller:
+
+- **`StreamVideoView`** renders video only. Use it when your app owns playback controls and layout.
+- **`StreamAVPlayerView`** presents AVKit's standard controls. Use it when you want Apple's player interface, AirPlay affordances, and AVKit-managed Picture in Picture.
+
+Start with `StreamVideoView` for a custom player experience. The Quick Start below loads a URL, displays the video, and explicitly starts playback. For the AVKit path and its presentation lifecycle, see [System Player, Picture in Picture, and Fullscreen](#system-player-picture-in-picture-and-fullscreen).
+
 ## Quick Start
 
 ```swift
@@ -25,61 +34,58 @@ import StreamKit
 import SwiftUI
 
 @MainActor
-class PlayerViewModel: ObservableObject {
-    private let controller = StreamPlayerController()
-    @Published var snapshot: PlaybackSnapshot
-    private var observationTask: Task<Void, Never>? = nil
+struct BasicPlayerView: View {
+    let url: URL
 
-    init() {
-        // Observe playback state changes
-        self.snapshot = controller.snapshot
-        self.observationTask = Task { [weak self] in
-            for await snapshot in controller.snapshots {
-                self?.snapshot = snapshot
+    @State private var controller = StreamPlayerController()
+    @State private var snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(spacing: 12) {
+            StreamVideoView(controller: controller)
+                .frame(height: 240)
+
+            Button(snapshot.intent == .play ? "Pause" : "Play") {
+                Task {
+                    do {
+                        if snapshot.intent == .play {
+                            await controller.pause()
+                        } else {
+                            try await controller.play()
+                        }
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
+                }
+            }
+            .disabled(snapshot.phase == .idle || snapshot.phase == .loading)
+
+            if let errorMessage {
+                Text(errorMessage).foregroundStyle(.red)
             }
         }
-    }
-
-    func loadMedia(url: URL) {
-        let mediaSource = MediaSource(url: url)
-        let loadHandle = controller.load(mediaSource)
-
-        Task {
+        .task {
+            for await updatedSnapshot in controller.snapshots {
+                snapshot = updatedSnapshot
+            }
+        }
+        .task {
             do {
-                try await loadHandle.waitUntilReady()
-                // Media is ready; playback starts automatically if autoplay=true
-                // Manual start: try await controller.play()
+                try await controller.load(MediaSource(url: url)).waitUntilReady()
+                try await controller.play()
             } catch {
-                // Handle loading errors (network, invalid URL, etc.)
-                print("Failed to load media: \(error)")
+                errorMessage = error.localizedDescription
             }
         }
-    }
-
-    func togglePlayback() {
-        Task {
-            if snapshot.phase == .playing || snapshot.phase == .waiting {
-                await controller.pause()
-            } else {
-                try? await controller.play()
-            }
+        .onDisappear {
+            Task { await controller.shutdown() }
         }
-    }
-
-    func seek(to time: TimeInterval) {
-        Task {
-            try? await controller.seek(to: time)
-        }
-    }
-
-    // Call when view disappears or player is no longer needed
-    func cleanup() async {
-        observationTask?.cancel()
-        observationTask = nil
-        await controller.shutdown()
     }
 }
 ```
+
+`PlayerConfiguration` defaults to `autoplay: false`, so the example starts playback after the item is ready. In a navigable app, keep the controller in a session owner above the player route if playback or Picture in Picture must survive route changes.
 
 ## State Observation
 
@@ -243,7 +249,12 @@ Button("Start PiP") {
 
 // Before shutting down or replacing the playback controller:
 Task {
-    await pipController.stopAndWaitUntilStopped()
+    do {
+        try await pipController.stopAndWaitUntilStopped()
+    } catch {
+        // PiP may still be active, so retain the playback controller.
+        return
+    }
     await controller.shutdown()
 }
 ```
@@ -256,24 +267,21 @@ StreamKit observes iOS audio-session interruptions for each controller. By defau
 
 `AVAudioSession` is process-wide, so the host application owns its category, mode, and activation policy. For background audio, the host must also enable the `audio` background mode in its app target. The StreamKit demo's **Audio Session & Background Playback** example shows this setup; the package cannot add app capabilities to a consuming application.
 
-Each live controller responds to process-wide interruptions independently. If an app has multiple controllers with play intent, each may resume when iOS allows it; the host app remains responsible for choosing which player owns audio until StreamKit defines a shared audio-focus policy.
-
-For a product that allows only one audible player, route user play actions through one app-owned coordinator and pause the other sessions first:
+Controllers that should share a single-active-player policy can receive the same `AudioPlaybackFocusCoordinator`. A new playback request then pauses the previously focused StreamKit controller. Controllers without a shared coordinator stay independent:
 
 ```swift
-@MainActor
-func requestPlayback(
-    _ selected: StreamPlayerController,
-    among players: [StreamPlayerController]
-) async throws {
-    for player in players where player !== selected {
-        await player.pause()
-    }
-    try await selected.play()
-}
+let audioFocus = AudioPlaybackFocusCoordinator()
+let first = StreamPlayerController(audioPlaybackFocusCoordinator: audioFocus)
+let second = StreamPlayerController(audioPlaybackFocusCoordinator: audioFocus)
 ```
 
-Serialize concurrent play requests at that owner boundary. This coordinates app-requested playback; it does not change StreamKit's per-controller interruption policy. If the app needs to resume only the focused player after an interruption, configure each controller with `automaticallyResumesAfterAudioInterruption: false` and let the host's audio-session owner choose which controller to resume.
+The coordinator only arbitrates among controllers that share it. The host app still owns `AVAudioSession` configuration, activation, and decisions about interruptions involving other apps.
+
+## Live and DVR playback
+
+Declare a source as `.live` to enable live-edge seeking and live timeline semantics. AVFoundation supplies the seekable ranges; the newest range end is a seekable-window boundary, not a guarantee of zero latency. The ranges can be discontinuous. The demo's **Live & DVR Playback** screen accepts an HTTPS HLS live manifest, displays the current ranges and media date, and provides live-edge and behind-live seeks. The user must supply a stream with an actual DVR window to exercise behind-live seeking. If the app needs the timeline to stay fresh while paused, set `PlayerConfiguration(keepsLiveTimelineCurrentWhilePaused: true)`. AVFoundation may use network resources while paused in that mode, increasing network and power use; this setting is off by default. See Apple's [`canUseNetworkResourcesForLiveStreamingWhilePaused`](https://developer.apple.com/documentation/avfoundation/avplayeritem/canusenetworkresourcesforlivestreamingwhilepaused) documentation.
+
+The demo displays AVFoundation's reported ranges. Verify live-window behavior against the target stream on a device.
 
 The demo uses asynchronous audio-session activation on iOS 27 and later. On earlier supported versions, it runs the legacy activation call away from the main thread. Its simulated interruption controls exercise StreamKit's response to begin/end events; real Siri, call, route, and background behavior still needs OS/device verification.
 
@@ -300,7 +308,24 @@ Each `load(_:)` call returns a `LoadHandle`:
 - Safe to call multiple times
 - After shutdown, all methods will fail or return immediately
 
-Removing `StreamVideoView` does not stop or shut down its controller. Put the controller in a playback-session owner whose lifetime matches the product's playback policy. On a normal route exit, pause or shut down the session; while custom PiP is active, retain the player and PiP controllers above the route and shut them down after PiP stops. Do not call `shutdown()` from the renderer's teardown because a renderer may disappear during fullscreen presentation or PiP.
+Removing a player view does not stop or shut down its controller. Put the controller in a playback-session owner whose lifetime matches the product's playback policy. Do not call `shutdown()` from renderer teardown because a renderer may disappear during fullscreen presentation or PiP.
+
+For the custom `StreamVideoView` PiP path, request a stop and wait for AVKit's final callback before shutting down playback:
+
+```swift
+try await pictureInPictureController.stopAndWaitUntilStopped()
+await controller.shutdown()
+```
+
+If the custom PiP wait is cancelled, it throws `CancellationError`; AVKit's stop request continues, but the caller must keep the playback controller alive until a later wait completes. For `StreamAVPlayerView`, AVKit owns the PiP stop action and doesn't expose a programmatic stop method. Keep the playback session alive until AVKit reports that PiP stopped, then shut it down:
+
+```swift
+try await presentationController.waitUntilStopped()
+try Task.checkCancellation()
+await controller.shutdown()
+```
+
+`waitUntilStopped()` only waits; it doesn't stop PiP. If its task is cancelled, it throws `CancellationError` and leaves the PiP session running. A new route creates a fresh controller after terminal shutdown.
 
 The demo's standalone player follows this pattern: the root retains its session, the player route reports appearance and disappearance, and the session releases the controller after the route and custom PiP are both inactive. A new route creates a fresh controller after shutdown because shutdown is terminal.
 

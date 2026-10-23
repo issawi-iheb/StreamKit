@@ -15,6 +15,9 @@ public struct PlaybackSnapshot: Equatable, Sendable {
     /// The total media duration, in seconds, when known.
     public let duration: TimeInterval?
 
+    /// Seekable ranges and wall-clock mapping reported by the current media item.
+    public let timeline: PlaybackTimeline
+
     /// The failure associated with the current playback state, if any.
     public let failure: PlaybackFailure?
 
@@ -23,12 +26,14 @@ public struct PlaybackSnapshot: Equatable, Sendable {
         intent: PlaybackIntent,
         currentTime: TimeInterval = 0,
         duration: TimeInterval? = nil,
-        failure: PlaybackFailure? = nil
+        failure: PlaybackFailure? = nil,
+        timeline: PlaybackTimeline = .init()
     ) {
         self.phase = phase
         self.intent = intent
         self.currentTime = currentTime
         self.duration = duration
         self.failure = failure
+        self.timeline = timeline
     }
 }

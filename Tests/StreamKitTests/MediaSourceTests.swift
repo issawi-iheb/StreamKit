@@ -32,6 +32,17 @@ struct MediaSourceTests {
         #expect(source.requestConfiguration.cookies.isEmpty)
         #expect(source.requestConfiguration.userAgent == nil)
         #expect(source.requestConfiguration.fairPlay == nil)
+        #expect(source.presentationKind == .unspecified)
+    }
+
+    @Test("Preserves explicit live presentation semantics")
+    func preservesLivePresentationKind() {
+        let source = MediaSource(
+            url: URL(string: "https://example.com/live.m3u8")!,
+            presentationKind: .live
+        )
+
+        #expect(source.presentationKind == .live)
     }
 
     @Test("Preserves cookies and user agent")

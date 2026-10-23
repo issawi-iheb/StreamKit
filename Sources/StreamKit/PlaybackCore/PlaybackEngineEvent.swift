@@ -30,8 +30,12 @@ enum PlaybackEngineEvent: Sendable {
     /// The playback position or duration has changed.
     case timeUpdated(
         currentTime: TimeInterval,
-        duration: TimeInterval?
+        duration: TimeInterval?,
+        timeline: PlaybackTimeline
     )
+
+    /// The seekable timeline changed without a playback-time update.
+    case timelineUpdated(PlaybackTimeline)
 
     /// A playback failure occurred.
     case failed(PlaybackFailure)

@@ -12,12 +12,19 @@ public struct PlayerConfiguration: Equatable, Sendable {
     /// process-wide audio session and enabling background audio if needed.
     public let automaticallyResumesAfterAudioInterruption: Bool
 
+    /// Keeps a live stream's seekable timeline fresh while playback is paused.
+    /// This allows AVFoundation to use network resources while paused and can
+    /// increase network and power use. Disabled by default.
+    public let keepsLiveTimelineCurrentWhilePaused: Bool
+
     /// Creates a player configuration.
     public init(
         autoplay: Bool = false,
-        automaticallyResumesAfterAudioInterruption: Bool = true
+        automaticallyResumesAfterAudioInterruption: Bool = true,
+        keepsLiveTimelineCurrentWhilePaused: Bool = false
     ) {
         self.autoplay = autoplay
         self.automaticallyResumesAfterAudioInterruption = automaticallyResumesAfterAudioInterruption
+        self.keepsLiveTimelineCurrentWhilePaused = keepsLiveTimelineCurrentWhilePaused
     }
 }

@@ -70,7 +70,7 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     }
 
     private var stopRequestedWhileStarting = false
-    private var stopWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private let stopWaiters = PictureInPictureStopWaiters()
 
     /// True from the start request until AVKit confirms the session has stopped.
     /// The active state is included because the source controller and layer
@@ -166,26 +166,13 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     }
 
     /// Requests PiP to stop and waits for AVKit to finish its lifecycle callback.
-    /// Cancellation stops waiting but does not cancel the PiP stop request.
-    public func stopAndWaitUntilStopped() async {
-        guard state != .idle else { return }
-
-        let waiterID = UUID()
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                guard state != .idle else {
-                    continuation.resume()
-                    return
-                }
-
-                stopWaiters[waiterID] = continuation
-                stopPictureInPicture()
-            }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.cancelStopWaiter(waiterID)
-            }
-        }
+    /// Cancellation throws `CancellationError` and stops waiting, but does not
+    /// cancel a stop request that AVKit has already received.
+    public func stopAndWaitUntilStopped() async throws {
+        try await stopWaiters.waitUntilStopped(
+            isStopped: { self.state == .idle },
+            onWaitStart: { self.stopPictureInPicture() }
+        )
     }
 
     func bind(to controller: StreamPlayerController) {
@@ -350,22 +337,11 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
         stopRequestedWhileStarting = false
         stopRequestedByHost = false
         protectedLayer = nil
-        resumeStopWaiters()
+        stopWaiters.resumeAll()
 
         installMostRecentAvailableLayer()
     }
 
-    private func cancelStopWaiter(_ id: UUID) {
-        stopWaiters.removeValue(forKey: id)?.resume()
-    }
-
-    private func resumeStopWaiters() {
-        let waiters = stopWaiters.values
-        stopWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
-    }
 }
 
 extension StreamPictureInPictureController: AVPictureInPictureControllerDelegate {
@@ -414,13 +390,7 @@ extension StreamPictureInPictureController: AVPictureInPictureControllerDelegate
 
         if shouldPause, let controller {
             Task { @MainActor in
-                do {
-                    try await controller.pause()
-                } catch is CancellationError {
-                    // Playback was already cancelled.
-                } catch {
-                    // Playback failure is reported through the player API.
-                }
+                await controller.pause()
             }
         }
     }

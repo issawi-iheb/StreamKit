@@ -30,6 +30,9 @@ protocol PlaybackEngine: AnyObject {
     /// Seeks to a position in seconds.
     func seek(to time: TimeInterval) async throws
 
+    /// Seeks to the live edge or a finite offset behind it.
+    func seekToLiveEdge(offsetFromLive: TimeInterval) async throws
+
     /// Releases the engine's playback resources.
     func shutdown() async
     

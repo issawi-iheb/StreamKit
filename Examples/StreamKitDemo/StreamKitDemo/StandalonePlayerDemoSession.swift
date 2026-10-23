@@ -226,6 +226,29 @@ final class StandalonePlayerDemoSession: ObservableObject {
 
         let generation = sessionGeneration
         let controller = playerController
+        let pipController = pictureInPictureController
+
+        do {
+            // Serialize shutdown with AVKit's final PiP stop callback. PiP may
+            // have started after the idle check above but before this task ran.
+            try await pipController.stopAndWaitUntilStopped()
+        } catch {
+            guard sessionGeneration == generation else {
+                isShuttingDown = false
+                return
+            }
+
+            isShuttingDown = false
+            return
+        }
+
+        guard sessionGeneration == generation,
+              !isPlayerRouteVisible,
+              pictureInPictureController === pipController,
+              pipController.state == .idle else {
+            isShuttingDown = false
+            return
+        }
 
         loadTask?.cancel()
         loadHandle?.cancel()

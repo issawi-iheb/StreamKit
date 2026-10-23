@@ -13,12 +13,26 @@ final class MockPlaybackEngine: PlaybackEngine {
     private var seekRegistrationWaiters: [Int: [CheckedContinuation<Void, Never>]] = [:]
     private var nextSeekID = 0
     private(set) var seekTimes: [TimeInterval] = []
+    private(set) var liveEdgeSeekOffsets: [TimeInterval] = []
     private(set) var playbackRate: Float = 1.0
     private(set) var playCallCount = 0
     private(set) var pauseCallCount = 0
+    private(set) var shutdownCallCount = 0
+    private(set) var isPlaying = false
+    private var shouldSuspendNextShutdown = false
+    private var pendingShutdown: CheckedContinuation<Void, Never>?
+    private var shutdownRegistrationWaiters: [CheckedContinuation<Void, Never>] = []
     private var shouldSuspendNextPlay = false
     private var pendingPlay: CheckedContinuation<Void, Error>?
     private var pendingPlayRegistrationWaiters: [
+        CheckedContinuation<Void, Never>
+    ] = []
+    private var shouldSuspendNextPause = false
+    private var pendingPause: CheckedContinuation<Void, Never>?
+    private var pendingPauseRegistrationWaiters: [CheckedContinuation<Void, Never>] = []
+    private var shouldSuspendNextAudioTrackQuery = false
+    private var pendingAudioTrackQuery: CheckedContinuation<[MediaTrack], Error>?
+    private var audioTrackQueryRegistrationWaiters: [
         CheckedContinuation<Void, Never>
     ] = []
     private var registeredLoadIDs: Set<Int> = []
@@ -45,6 +59,23 @@ final class MockPlaybackEngine: PlaybackEngine {
         self.continuation = stream.continuation
     }
 
+    func suspendNextShutdown() {
+        shouldSuspendNextShutdown = true
+    }
+
+    func waitForShutdownCall() async {
+        guard shutdownCallCount == 0 else { return }
+        await withCheckedContinuation { continuation in
+            shutdownRegistrationWaiters.append(continuation)
+        }
+    }
+
+    func completeShutdown() {
+        guard let pendingShutdown else { return }
+        self.pendingShutdown = nil
+        pendingShutdown.resume()
+    }
+
     // MARK: - Event Control
 
     func emit(_ event: PlaybackEngineEvent, fromLoad loadID: Int) {
@@ -69,6 +100,7 @@ final class MockPlaybackEngine: PlaybackEngine {
     // MARK: - Load Control
 
     func load(_ source: MediaSource, generation: UInt64) async throws {
+        isPlaying = false
         nextLoadID += 1
         let loadID = nextLoadID
 
@@ -194,6 +226,58 @@ final class MockPlaybackEngine: PlaybackEngine {
         continuation.resume()
     }
 
+    func suspendNextPause() {
+        shouldSuspendNextPause = true
+    }
+
+    func waitForPendingPause() async {
+        guard pendingPause == nil else { return }
+
+        await withCheckedContinuation { continuation in
+            guard pendingPause == nil else {
+                continuation.resume()
+                return
+            }
+
+            pendingPauseRegistrationWaiters.append(continuation)
+        }
+    }
+
+    func completePendingPause() {
+        guard let continuation = pendingPause else { return }
+
+        pendingPause = nil
+        continuation.resume()
+    }
+
+    func suspendNextAudioTrackQuery() {
+        shouldSuspendNextAudioTrackQuery = true
+    }
+
+    func waitForPendingAudioTrackQuery() async {
+        guard pendingAudioTrackQuery == nil else {
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            guard pendingAudioTrackQuery == nil else {
+                continuation.resume()
+                return
+            }
+
+            audioTrackQueryRegistrationWaiters.append(continuation)
+        }
+    }
+
+    func completePendingAudioTrackQuery() {
+        guard let continuation = pendingAudioTrackQuery else {
+            return
+        }
+
+        pendingAudioTrackQuery = nil
+        continuation.resume(returning: audioTracks)
+    }
+
     private func cancelPendingPlay() {
         failPendingPlay(with: CancellationError())
     }
@@ -212,35 +296,48 @@ final class MockPlaybackEngine: PlaybackEngine {
     func play() async throws {
         playCallCount += 1
 
-        guard shouldSuspendNextPlay else {
-            return
-        }
+        if shouldSuspendNextPlay {
+            shouldSuspendNextPlay = false
 
-        shouldSuspendNextPlay = false
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation {
+                    (continuation: CheckedContinuation<Void, Error>) in
 
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, Error>) in
+                    guard !Task.isCancelled else {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
 
-                guard !Task.isCancelled else {
-                    continuation.resume(throwing: CancellationError())
-                    return
+                    pendingPlay = continuation
+                    resumePendingPlayRegistrationWaiters()
                 }
-
-                pendingPlay = continuation
-                resumePendingPlayRegistrationWaiters()
-            }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.cancelPendingPlay()
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    self?.cancelPendingPlay()
+                }
             }
         }
 
-        // Tests explicitly control when playback events occur.
+        // Model the engine applying playback when its async request completes.
+        isPlaying = true
     }
 
     func pause() async {
         pauseCallCount += 1
+
+        if shouldSuspendNextPause {
+            shouldSuspendNextPause = false
+            await withCheckedContinuation { continuation in
+                pendingPause = continuation
+                let waiters = pendingPauseRegistrationWaiters
+                pendingPauseRegistrationWaiters.removeAll()
+                for waiter in waiters {
+                    waiter.resume()
+                }
+            }
+        }
+
+        isPlaying = false
     }
 
     func setPlaybackRate(_ rate: Float) async throws {
@@ -279,6 +376,10 @@ final class MockPlaybackEngine: PlaybackEngine {
         }
     }
 
+    func seekToLiveEdge(offsetFromLive: TimeInterval) async throws {
+        liveEdgeSeekOffsets.append(offsetFromLive)
+    }
+
     private func cancelSeek(id: Int) {
         guard let continuation = pendingSeeks.removeValue(forKey: id) else {
             return
@@ -289,9 +390,26 @@ final class MockPlaybackEngine: PlaybackEngine {
 
 
     func shutdown() async {
+        shutdownCallCount += 1
+        let shutdownWaiters = shutdownRegistrationWaiters
+        shutdownRegistrationWaiters.removeAll()
+        for waiter in shutdownWaiters {
+            waiter.resume()
+        }
+
+        isPlaying = false
+
         // Cancel pending play.
         cancelPendingPlay()
         resumePendingPlayRegistrationWaiters()
+
+        // Release pending pause calls.
+        completePendingPause()
+        let pauseWaiters = pendingPauseRegistrationWaiters
+        pendingPauseRegistrationWaiters.removeAll()
+        for waiter in pauseWaiters {
+            waiter.resume()
+        }
 
         // Cancel pending loads.
         let loads = pendingLoads.values
@@ -325,11 +443,31 @@ final class MockPlaybackEngine: PlaybackEngine {
             waiter.resume()
         }
 
+        if shouldSuspendNextShutdown {
+            shouldSuspendNextShutdown = false
+            await withCheckedContinuation { continuation in
+                pendingShutdown = continuation
+            }
+        }
+
         continuation.finish()
     }
 
     func availableAudioTracks() async throws -> [MediaTrack] {
-        audioTracks
+        if shouldSuspendNextAudioTrackQuery {
+            shouldSuspendNextAudioTrackQuery = false
+
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingAudioTrackQuery = continuation
+                let waiters = audioTrackQueryRegistrationWaiters
+                audioTrackQueryRegistrationWaiters.removeAll()
+                for waiter in waiters {
+                    waiter.resume()
+                }
+            }
+        }
+
+        return audioTracks
     }
 
     func availableSubtitleTracks() async throws -> [MediaTrack] {

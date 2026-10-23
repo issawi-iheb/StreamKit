@@ -119,6 +119,86 @@ struct AVFoundationPlaybackEngineTests {
         await engine.shutdown()
     }
 
+    @Test("A rejected replacement load releases the previous item")
+    func rejectedReplacementLoadReleasesPreviousItem() async throws {
+        let engine = AVFoundationPlaybackEngine()
+        let activeLoad = Task { @MainActor in
+            try await engine.load(
+                MediaSource(url: URL(string: "https://media.example.com/active.m3u8")!),
+                generation: 1
+            )
+        }
+
+        await Task.yield()
+        #expect(engine.renderingPlayer.currentItem != nil)
+
+        let rejectedSource = MediaSource(
+            url: URL(string: "http://media.example.com/protected.m3u8")!,
+            requestConfiguration: MediaRequestConfiguration(
+                fairPlay: FairPlayConfiguration(
+                    licenseProvider: EngineTestFairPlayProvider()
+                )
+            )
+        )
+
+        do {
+            try await engine.load(rejectedSource, generation: 2)
+            Issue.record("Expected insecure FairPlay media to be rejected.")
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .unsupportedConfiguration)
+        }
+
+        #expect(engine.renderingPlayer.currentItem == nil)
+
+        await engine.shutdown()
+        do {
+            try await activeLoad.value
+            Issue.record("The replaced load unexpectedly succeeded.")
+        } catch is CancellationError {
+            // Expected: the newer load invalidated the pending item.
+        }
+    }
+
+    @Test("An older load generation cannot replace the current item")
+    func olderLoadGenerationCannotReplaceCurrentItem() async throws {
+        let engine = AVFoundationPlaybackEngine()
+        let currentLoad = Task { @MainActor in
+            try await engine.load(
+                MediaSource(url: URL(string: "https://media.example.com/current.m3u8")!),
+                generation: 2
+            )
+        }
+
+        await Task.yield()
+        let currentItem = engine.renderingPlayer.currentItem
+        #expect(currentItem != nil)
+
+        let staleLoad = Task { @MainActor in
+            try await engine.load(
+                MediaSource(url: URL(string: "https://media.example.com/stale.m3u8")!),
+                generation: 1
+            )
+        }
+        await Task.yield()
+
+        #expect(engine.renderingPlayer.currentItem === currentItem)
+
+        staleLoad.cancel()
+        await engine.shutdown()
+        do {
+            try await staleLoad.value
+            Issue.record("The older load generation unexpectedly succeeded.")
+        } catch is CancellationError {
+            // Expected: the engine rejects a request older than the active one.
+        }
+        do {
+            try await currentLoad.value
+            Issue.record("The pending current load unexpectedly succeeded.")
+        } catch is CancellationError {
+            // Expected: shutdown cancels the pending load.
+        }
+    }
+
     @Test("Play without a loaded source throws an invalid source failure")
     func playWithoutLoadedSourceThrows() async {
         let engine = AVFoundationPlaybackEngine()

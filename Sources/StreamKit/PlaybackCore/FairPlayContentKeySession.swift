@@ -11,7 +11,23 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
     private let exchange: FairPlayKeyExchange
     private let diagnosticHandler: (@Sendable (FairPlayKeySessionDiagnostic) -> Void)?
     private let delegateQueue = DispatchQueue(label: "StreamKit.FairPlayContentKeySession")
-    private var tasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+    private lazy var requestLifecycle = FairPlayKeyRequestLifecycle<AVContentKeyRequest>(
+        processor: { [weak self] request, isRenewal in
+            guard let self else { throw CancellationError() }
+            return try await self.makeContentKey(for: request, isRenewal: isRenewal)
+        },
+        successHandler: { request, contentKey in
+            request.processContentKeyResponse(
+                AVContentKeyResponse(fairPlayStreamingKeyResponseData: contentKey)
+            )
+        },
+        failureHandler: { request, error in
+            request.processContentKeyResponseError(error)
+        },
+        failureMapper: { error in
+            FairPlayErrorMapping.playbackFailure(for: error)
+        }
+    )
     private var isInvalidated = false
     private var recipient: AVURLAsset?
 
@@ -37,22 +53,8 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
             self.recipient = nil
         }
         session.setDelegate(nil, queue: nil)
-        for (identifier, task) in tasks {
-            task.cancel()
-            if let request = activeRequests[identifier] {
-                finish(
-                    request,
-                    identifier: identifier,
-                    response: nil,
-                    error: CancellationError()
-                )
-            }
-        }
-        tasks.removeAll()
-        activeRequests.removeAll()
+        requestLifecycle.invalidate()
     }
-
-    private var activeRequests: [ObjectIdentifier: AVContentKeyRequest] = [:]
 
     nonisolated func contentKeySession(
         _ session: AVContentKeySession,
@@ -100,9 +102,10 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
         _ session: AVContentKeySession,
         didProvide persistableContentKeyRequest: AVPersistableContentKeyRequest
     ) {
-        Task { @MainActor in
-            persistableContentKeyRequest.processContentKeyResponseError(
-                PlaybackFailure(
+        Task { @MainActor [weak self] in
+            self?.requestLifecycle.reject(
+                persistableContentKeyRequest,
+                with: PlaybackFailure(
                     code: .unsupportedConfiguration,
                     message: "Offline FairPlay keys are not supported by this StreamKit integration."
                 )
@@ -114,88 +117,35 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
         _ request: AVContentKeyRequest,
         isRenewal: Bool
     ) {
-        guard !isInvalidated else {
-            request.processContentKeyResponseError(CancellationError())
-            return
-        }
-
-        let identifier = ObjectIdentifier(request)
-        guard tasks[identifier] == nil else { return }
-        activeRequests[identifier] = request
-        tasks[identifier] = Task { [weak self] in
-            guard let self else { return }
-            await self.process(request, identifier: identifier, isRenewal: isRenewal)
-        }
+        requestLifecycle.begin(request, isRenewal: isRenewal)
     }
 
-    private func process(
-        _ request: AVContentKeyRequest,
-        identifier: ObjectIdentifier,
+    private func makeContentKey(
+        for request: AVContentKeyRequest,
         isRenewal: Bool
-    ) async {
-        defer {
-            tasks[identifier] = nil
-        }
-
-        do {
-            let keyIdentifier: String
-            if let keyURI = request.identifier as? URL {
-                keyIdentifier = keyURI.absoluteString
-            } else if let value = request.identifier as? String {
-                keyIdentifier = value
-            } else {
-                throw PlaybackFailure(
-                    code: .unsupportedConfiguration,
-                    message: "The FairPlay key request did not contain a supported identifier."
-                )
-            }
-
-            let ckc = try await exchange.contentKey(
-                for: keyIdentifier,
-                initializationData: request.initializationData,
-                isRenewal: isRenewal
-            ) { certificate, contentIdentifier in
-                try await self.streamingContentKeyRequestData(
-                    from: request,
-                    certificate: certificate,
-                    contentIdentifier: contentIdentifier
-                )
-            }
-            finish(
-                request,
-                identifier: identifier,
-                response: AVContentKeyResponse(fairPlayStreamingKeyResponseData: ckc),
-                error: nil
-            )
-        } catch is CancellationError {
-            finish(request, identifier: identifier, response: nil, error: CancellationError())
-        } catch {
-            // Do not expose provider payloads, URLs, SPCs, or CKCs through the
-            // public playback failure.
-            finish(
-                request,
-                identifier: identifier,
-                response: nil,
-                error: FairPlayErrorMapping.playbackFailure(for: error)
+    ) async throws -> Data {
+        let keyIdentifier: String
+        if let keyURI = request.identifier as? URL {
+            keyIdentifier = keyURI.absoluteString
+        } else if let value = request.identifier as? String {
+            keyIdentifier = value
+        } else {
+            throw PlaybackFailure(
+                code: .unsupportedConfiguration,
+                message: "The FairPlay key request did not contain a supported identifier."
             )
         }
-    }
 
-    private func finish(
-        _ request: AVContentKeyRequest,
-        identifier: ObjectIdentifier,
-        response: AVContentKeyResponse?,
-        error: Error?
-    ) {
-        // Remove first so an invalidation racing with a late provider reply
-        // cannot resolve the same AVFoundation request twice.
-        guard activeRequests[identifier] === request else { return }
-        activeRequests[identifier] = nil
-
-        if let response {
-            request.processContentKeyResponse(response)
-        } else if let error {
-            request.processContentKeyResponseError(error)
+        return try await exchange.contentKey(
+            for: keyIdentifier,
+            initializationData: request.initializationData,
+            isRenewal: isRenewal
+        ) { certificate, contentIdentifier in
+            try await self.streamingContentKeyRequestData(
+                from: request,
+                certificate: certificate,
+                contentIdentifier: contentIdentifier
+            )
         }
     }
 

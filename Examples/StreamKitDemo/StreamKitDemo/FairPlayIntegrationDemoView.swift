@@ -120,6 +120,7 @@ struct FairPlayIntegrationDemoView: View {
                 GroupBox("What this tests") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("StreamKit creates the AVContentKeySession and SPC. This demo downloads the public evaluation certificate, posts the SPC to Axinom, sends your token in X-AxDRM-Message, and returns the CKC to AVFoundation.")
+                        Text("If AVFoundation requests a renewal, the diagnostics record it and the provider receives isRenewal = true. Renewal timing is controlled by the stream and license service; this public vector may not request a renewal during a short test.")
                         Text("Use a new short-lived token generated for this Axinom test vector. Tokens are not saved or logged. Do not use a management API key here.")
                             .foregroundStyle(.secondary)
                     }
@@ -272,7 +273,11 @@ private struct AxinomFairPlayLicenseProvider: FairPlayLicenseProvider {
     }
 
     func contentKey(for request: FairPlayLicenseRequest) async throws -> Data {
-        await diagnostics.record("Certificate is ready; posting the SPC to the FairPlay license service.")
+        await diagnostics.record(
+            request.isRenewal
+                ? "AVFoundation requested FairPlay key renewal; posting the renewal SPC to the license service."
+                : "Certificate is ready; posting the SPC to the FairPlay license service."
+        )
         var urlRequest = URLRequest(url: licenseURL)
         urlRequest.timeoutInterval = 30
         urlRequest.httpMethod = "POST"

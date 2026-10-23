@@ -21,9 +21,13 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
     private weak var mountedViewController: AVPlayerViewController?
     private weak var pendingViewController: AVPlayerViewController?
     private var retainedViewController: AVPlayerViewController?
+    private var pendingPlayer: AVPlayer?
+    private var hasPendingPlayer = false
+    private let stopWaiters = PictureInPictureStopWaiters()
     public var dismissalBehavior: StreamPictureInPictureDismissalBehavior = .pausePlayback
 
     private weak var playbackController: StreamPlayerController?
+    private weak var pendingPlaybackController: StreamPlayerController?
     private let isApplicationInBackground: @MainActor () -> Bool
     private var stopRequestedByHost = false
 
@@ -47,12 +51,40 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
     }
     
     func bind(to controller: StreamPlayerController) {
-        guard playbackController !== controller,
-              state == .idle else {
+        guard playbackController !== controller else {
+            pendingPlaybackController = nil
+            return
+        }
+
+        guard state == .idle else {
+            pendingPlaybackController = controller
             return
         }
 
         playbackController = controller
+    }
+
+    /// Waits until AVKit reports that PiP has stopped or failed to start.
+    /// This does not request a stop; `AVPlayerViewController` owns that action.
+    /// Cancellation stops this wait and does not affect the PiP session.
+    public func waitUntilStopped() async throws {
+        try await stopWaiters.waitUntilStopped {
+            self.state == .idle
+        }
+    }
+
+    fileprivate func updatePlayer(
+        _ player: AVPlayer?,
+        on viewController: AVPlayerViewController
+    ) {
+        guard state != .idle,
+              retainedViewController === viewController else {
+            viewController.player = player
+            return
+        }
+
+        pendingPlayer = player
+        hasPendingPlayer = true
     }
 
     /// Call before a host-initiated PiP stop, if the host has such a stop flow.
@@ -60,7 +92,7 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
         stopRequestedByHost = true
     }
 
-    fileprivate func attach(_ viewController: AVPlayerViewController) {
+    func attach(_ viewController: AVPlayerViewController) {
         if state != .idle,
            let retainedViewController,
            retainedViewController !== viewController {
@@ -92,6 +124,8 @@ extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
         _ playerViewController: AVPlayerViewController,
         willStartPictureInPictureWith proposedViewController: UIViewController
     ) {
+        guard isCurrent(playerViewController) else { return }
+
         stopRequestedByHost = false
         state = .starting
     }
@@ -99,6 +133,8 @@ extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
     public func playerViewControllerDidStartPictureInPicture(
         _ playerViewController: AVPlayerViewController
     ) {
+        guard isCurrent(playerViewController) else { return }
+
         state = .active
     }
 
@@ -106,18 +142,24 @@ extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
         _ playerViewController: AVPlayerViewController,
         failedToStartPictureInPictureWithError error: Error
     ) {
+        guard isCurrent(playerViewController) else { return }
+
         finish(playerViewController)
     }
 
     public func playerViewControllerWillStopPictureInPicture(
         _ playerViewController: AVPlayerViewController
     ) {
+        guard isCurrent(playerViewController) else { return }
+
         state = .stopping
     }
 
     public func playerViewControllerDidStopPictureInPicture(
         _ playerViewController: AVPlayerViewController
     ) {
+        guard isCurrent(playerViewController) else { return }
+
         let shouldPause = PictureInPictureDismissalPolicy(
             behavior: dismissalBehavior,
             isApplicationInBackground: isApplicationInBackground
@@ -130,13 +172,7 @@ extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
 
         if shouldPause, let controller {
             Task { @MainActor in
-                do {
-                    try await controller.pause()
-                } catch is CancellationError {
-                    // Playback was already cancelled.
-                } catch {
-                    // Playback failure is reported through the player API.
-                }
+                await controller.pause()
             }
         }
     }
@@ -145,13 +181,34 @@ extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
         _ playerViewController: AVPlayerViewController,
         restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping @Sendable (Bool) -> Void
     ) {
+        guard isCurrent(playerViewController) else {
+            completionHandler(false)
+            return
+        }
+
         let gate = StreamPictureInPictureRestorationCompletion(completionHandler)
         restorationHandler { restored in gate.call(restored) }
+    }
+
+    private func isCurrent(_ viewController: AVPlayerViewController) -> Bool {
+        retainedViewController === viewController
     }
 
     private func finish(_ viewController: AVPlayerViewController) {
         state = .idle
         stopRequestedByHost = false
+        stopWaiters.resumeAll()
+
+        if hasPendingPlayer, retainedViewController === viewController {
+            viewController.player = pendingPlayer
+            pendingPlayer = nil
+            hasPendingPlayer = false
+        }
+
+        if let pendingPlaybackController {
+            playbackController = pendingPlaybackController
+            self.pendingPlaybackController = nil
+        }
 
         if mountedViewController !== viewController {
             viewController.delegate = nil
@@ -166,6 +223,7 @@ extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
             self.pendingViewController = nil
         }
     }
+
 }
 
 /// Presents a StreamKit player with Apple's standard AVKit controls.
@@ -208,9 +266,7 @@ public struct StreamAVPlayerView: UIViewControllerRepresentable {
         _ viewController: AVPlayerViewController,
         context: Context
     ) {
-        if viewController.player !== controller.renderingPlayer {
-            viewController.player = controller.renderingPlayer
-        }
+        context.coordinator.updatePlayer(controller.renderingPlayer, on: viewController)
         viewController.canStartPictureInPictureAutomaticallyFromInline =
             automaticallyStartsPictureInPictureWhenLeavingApp
         context.coordinator.bind(to: controller)

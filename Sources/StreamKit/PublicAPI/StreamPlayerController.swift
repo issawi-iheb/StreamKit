@@ -35,51 +35,43 @@ public final class StreamPlayerController {
     // MARK: - Private Properties
 
     private let engine: any PlaybackEngine
-    var renderingPlayer: AVPlayer? {
-        (engine as? AVFoundationPlaybackEngine)?.renderingPlayer
-    }
+    /// AVPlayer presentation handle for the AVFoundation-backed public player.
+    /// Injected engine instances used internally may not provide a renderer.
+    let renderingPlayer: AVPlayer?
     private let snapshotBroadcaster = SnapshotBroadcaster()
 
     private var eventTask: Task<Void, Never>?
     private var activeLoadTask: Task<Void, Error>?
 
     private let audioInterruptionSource: any AudioInterruptionSource
+    private let audioPlaybackFocusCoordinator: AudioPlaybackFocusCoordinator?
     private var audioInterruptionTask: Task<Void, Never>?
-    private var isAudioInterrupted = false
-    private var wasPlayingBeforeAudioInterruption = false
-    private var audioInterruptionRequiresExplicitPlay = false
+    private var audioInterruptionCoordinator = AudioInterruptionCoordinator()
 
     /// Identifies the current source-loading operation.
     private var loadGeneration: UInt64 = 0
     /// Orders app playback commands across async engine calls.
     private var playbackCommandGeneration: UInt64 = 0
+    /// Prevents an older seek from committing after a newer seek completes.
+    private var seekGeneration: UInt64 = 0
 
     private var isShutdown = false
+    private var shutdownTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
     public init(
-        configuration: PlayerConfiguration = .init()
-    ) {
-        self.configuration = configuration
-        self.engine = AVFoundationPlaybackEngine()
-        self.audioInterruptionSource = SystemAudioInterruptionSource()
-        self.snapshot = PlaybackSnapshot(
-            phase: .idle,
-            intent: .pause
-        )
-
-        observeEngineEvents()
-        observeAudioSessionInterruptions()
-    }
-
-    internal init(
         configuration: PlayerConfiguration = .init(),
-        engine: any PlaybackEngine
+        audioPlaybackFocusCoordinator: AudioPlaybackFocusCoordinator? = nil
     ) {
+        let engine = AVFoundationPlaybackEngine(
+            keepsLiveTimelineCurrentWhilePaused: configuration.keepsLiveTimelineCurrentWhilePaused
+        )
         self.configuration = configuration
         self.engine = engine
+        self.renderingPlayer = engine.renderingPlayer
         self.audioInterruptionSource = SystemAudioInterruptionSource()
+        self.audioPlaybackFocusCoordinator = audioPlaybackFocusCoordinator
         self.snapshot = PlaybackSnapshot(
             phase: .idle,
             intent: .pause
@@ -92,11 +84,33 @@ public final class StreamPlayerController {
     internal init(
         configuration: PlayerConfiguration = .init(),
         engine: any PlaybackEngine,
-        audioInterruptionSource: any AudioInterruptionSource
+        audioPlaybackFocusCoordinator: AudioPlaybackFocusCoordinator? = nil
     ) {
         self.configuration = configuration
         self.engine = engine
+        self.renderingPlayer = nil
+        self.audioInterruptionSource = SystemAudioInterruptionSource()
+        self.audioPlaybackFocusCoordinator = audioPlaybackFocusCoordinator
+        self.snapshot = PlaybackSnapshot(
+            phase: .idle,
+            intent: .pause
+        )
+
+        observeEngineEvents()
+        observeAudioSessionInterruptions()
+    }
+
+    internal init(
+        configuration: PlayerConfiguration = .init(),
+        engine: any PlaybackEngine,
+        audioInterruptionSource: any AudioInterruptionSource,
+        audioPlaybackFocusCoordinator: AudioPlaybackFocusCoordinator? = nil
+    ) {
+        self.configuration = configuration
+        self.engine = engine
+        self.renderingPlayer = nil
         self.audioInterruptionSource = audioInterruptionSource
+        self.audioPlaybackFocusCoordinator = audioPlaybackFocusCoordinator
         self.snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
 
         observeEngineEvents()
@@ -117,12 +131,14 @@ public final class StreamPlayerController {
 
             return LoadHandle(readiness: task)
         }
-        let generation = beginLoading()
+        let generation = beginLoading(presentationKind: source.presentationKind)
 
         let task = Task { @MainActor [weak self] in
             guard let self else {
                 throw CancellationError()
             }
+
+            var autoplayCommandGeneration: UInt64?
 
             do {
                 try await engine.load(source, generation: generation)
@@ -143,12 +159,28 @@ public final class StreamPlayerController {
                             phase: .ready,
                             intent: .play,
                             currentTime: snapshot.currentTime,
-                            duration: snapshot.duration
+                            duration: snapshot.duration,
+                            timeline: snapshot.timeline
                         )
                     )
 
-                    if !isAudioInterrupted && !audioInterruptionRequiresExplicitPlay {
+                    if audioInterruptionCoordinator.allowsPlaybackStart {
+                        guard await acquireAudioPlaybackFocus() else { return }
+                        let commandGeneration = playbackCommandGeneration
+                        autoplayCommandGeneration = commandGeneration
                         try await engine.play()
+
+                        guard !isShutdown,
+                              loadGeneration == generation
+                        else {
+                            await reconcileTransportIntent(afterApplyingPlayback: true)
+                            throw CancellationError()
+                        }
+
+                        if playbackCommandGeneration != commandGeneration
+                            || snapshot.intent != .play {
+                            await reconcileTransportIntent(afterApplyingPlayback: true)
+                        }
                     }
 
                     guard !isShutdown,
@@ -162,7 +194,8 @@ public final class StreamPlayerController {
                             phase: .ready,
                             intent: .pause,
                             currentTime: 0,
-                            duration: snapshot.duration
+                            duration: snapshot.duration,
+                            timeline: snapshot.timeline
                         )
                     )
                 }
@@ -171,6 +204,13 @@ public final class StreamPlayerController {
                       loadGeneration == generation
                 else {
                     throw error
+                }
+
+                if let autoplayCommandGeneration,
+                   playbackCommandGeneration != autoplayCommandGeneration
+                    || snapshot.intent != .play {
+                    await reconcileTransportIntent()
+                    return
                 }
 
                 if error is CancellationError {
@@ -187,7 +227,8 @@ public final class StreamPlayerController {
                         PlaybackSnapshot(
                             phase: .failed,
                             intent: .pause,
-                            failure: failure
+                            failure: failure,
+                            timeline: snapshot.timeline
                         )
                     )
                 }
@@ -201,11 +242,14 @@ public final class StreamPlayerController {
         return LoadHandle(readiness: task)
     }
 
-    private func beginLoading() -> UInt64 {
+    private func beginLoading(
+        presentationKind: MediaPresentationKind
+    ) -> UInt64 {
         loadGeneration &+= 1
         playbackCommandGeneration &+= 1
+        seekGeneration &+= 1
         let generation = loadGeneration
-        audioInterruptionRequiresExplicitPlay = false
+        audioInterruptionCoordinator.sourceLoadBegan()
 
         activeLoadTask?.cancel()
         activeLoadTask = nil
@@ -217,7 +261,8 @@ public final class StreamPlayerController {
         updateSnapshot(
             PlaybackSnapshot(
                 phase: .loading,
-                intent: intent
+                intent: intent,
+                timeline: PlaybackTimeline(presentationKind: presentationKind)
             )
         )
 
@@ -235,9 +280,7 @@ public final class StreamPlayerController {
         playbackCommandGeneration &+= 1
         let commandGeneration = playbackCommandGeneration
 
-        if !isAudioInterrupted {
-            audioInterruptionRequiresExplicitPlay = false
-        }
+        audioInterruptionCoordinator.playbackIntentRequested()
 
         let shouldRestartEndedItem = snapshot.phase == .ended
             && snapshot.duration.map { $0.isFinite && $0 >= 0 } == true
@@ -253,9 +296,6 @@ public final class StreamPlayerController {
         case .loading:
             // The loading task will start playback when ready.
             updateIntent(.play)
-            if isAudioInterrupted {
-                wasPlayingBeforeAudioInterruption = true
-            }
             return
 
         case .failed:
@@ -272,10 +312,9 @@ public final class StreamPlayerController {
             updateIntent(.play)
         }
 
-        if isAudioInterrupted {
+        if audioInterruptionCoordinator.isInterrupted {
             // Keep the request. The interruption-end handler will retry if
             // the system permits automatic resumption.
-            wasPlayingBeforeAudioInterruption = true
             return
         }
 
@@ -297,15 +336,22 @@ public final class StreamPlayerController {
                 }
             }
 
+            guard await acquireAudioPlaybackFocus() else { return }
+
             try await engine.play()
 
             guard !isShutdown else {
                 throw shutdownFailure()
             }
             guard loadGeneration == generation else {
+                await reconcileTransportIntent(afterApplyingPlayback: true)
                 throw CancellationError()
             }
             guard playbackCommandGeneration == commandGeneration else {
+                // An async engine may apply its play request only when the
+                // operation completes. Reassert a newer pause after that late
+                // completion so transport state follows the latest intent.
+                await reconcileTransportIntent(afterApplyingPlayback: true)
                 return
             }
         } catch {
@@ -330,7 +376,8 @@ public final class StreamPlayerController {
                     intent: .pause,
                     currentTime: snapshot.currentTime,
                     duration: snapshot.duration,
-                    failure: failure
+                    failure: failure,
+                    timeline: snapshot.timeline
                 )
             )
 
@@ -348,11 +395,16 @@ public final class StreamPlayerController {
         let commandGeneration = playbackCommandGeneration
 
         updateIntent(.pause)
+        audioPlaybackFocusCoordinator?.releaseFocus(for: self)
 
         await engine.pause()
 
-        guard !isShutdown,
-              playbackCommandGeneration == commandGeneration else {
+        guard !isShutdown else {
+            return
+        }
+
+        guard playbackCommandGeneration == commandGeneration else {
+            await reconcileTransportIntent(afterApplyingPlayback: false)
             return
         }
 
@@ -363,7 +415,8 @@ public final class StreamPlayerController {
                     phase: .paused,
                     intent: .pause,
                     currentTime: snapshot.currentTime,
-                    duration: snapshot.duration
+                    duration: snapshot.duration,
+                    timeline: snapshot.timeline
                 )
             )
 
@@ -415,11 +468,13 @@ public final class StreamPlayerController {
         }
 
         let generation = loadGeneration
+        let seekGeneration = beginSeek()
 
         try await engine.seek(to: time)
 
         guard !isShutdown,
-              loadGeneration == generation
+              loadGeneration == generation,
+              self.seekGeneration == seekGeneration
         else {
             throw CancellationError()
         }
@@ -430,9 +485,56 @@ public final class StreamPlayerController {
                 intent: snapshot.intent,
                 currentTime: time,
                 duration: snapshot.duration,
-                failure: snapshot.failure
+                failure: snapshot.failure,
+                timeline: PlaybackTimeline(
+                    seekableRanges: snapshot.timeline.seekableRanges,
+                    presentationKind: snapshot.timeline.presentationKind
+                )
             )
         )
+    }
+
+    /// Seeks to the live edge, optionally remaining a finite number of seconds
+    /// behind it. The source must have been declared with `.live`.
+    public func seekToLiveEdge(offsetFromLive: TimeInterval = 0) async throws {
+        guard !isShutdown else {
+            throw shutdownFailure()
+        }
+
+        guard snapshot.phase != .idle,
+              snapshot.phase != .loading,
+              snapshot.phase != .failed
+        else {
+            throw PlaybackFailure(
+                code: .invalidSource,
+                message: "A ready live media source is required to seek to the live edge."
+            )
+        }
+
+        guard snapshot.timeline.presentationKind == .live else {
+            throw PlaybackFailure(
+                code: .unsupportedConfiguration,
+                message: "Seek to live edge requires a source declared with the live presentation kind."
+            )
+        }
+
+        guard offsetFromLive.isFinite, offsetFromLive >= 0 else {
+            throw PlaybackFailure(
+                code: .invalidSource,
+                message: "The live offset must be finite and non-negative."
+            )
+        }
+
+        let generation = loadGeneration
+        let seekGeneration = beginSeek()
+        try await engine.seekToLiveEdge(offsetFromLive: offsetFromLive)
+
+        guard !isShutdown,
+              loadGeneration == generation,
+              self.seekGeneration == seekGeneration
+        else {
+            throw CancellationError()
+        }
     }
 
     // MARK: - Engine Events
@@ -474,14 +576,9 @@ public final class StreamPlayerController {
 
         switch interruption {
         case .began:
-            guard !isAudioInterrupted else {
+            guard audioInterruptionCoordinator.interruptionBegan(for: snapshot) else {
                 return
             }
-
-            isAudioInterrupted = true
-            wasPlayingBeforeAudioInterruption = snapshot.intent == .play && [
-                .loading, .ready, .playing, .waiting
-            ].contains(snapshot.phase)
 
             await engine.pause()
 
@@ -493,18 +590,11 @@ public final class StreamPlayerController {
             }
 
         case let .ended(systemAllowsResume):
-            guard isAudioInterrupted else {
-                return
-            }
-
-            isAudioInterrupted = false
-            let shouldResume = systemAllowsResume
-                && configuration.automaticallyResumesAfterAudioInterruption
-                && wasPlayingBeforeAudioInterruption
-                && snapshot.intent == .play
-            audioInterruptionRequiresExplicitPlay = snapshot.intent == .play && !shouldResume
-            wasPlayingBeforeAudioInterruption = false
-
+            let shouldResume = audioInterruptionCoordinator.interruptionEnded(
+                systemAllowsResume: systemAllowsResume,
+                automaticallyResumes: configuration.automaticallyResumesAfterAudioInterruption,
+                snapshot: snapshot
+            )
             guard shouldResume else {
                 return
             }
@@ -515,10 +605,34 @@ public final class StreamPlayerController {
                 return
             }
 
+            guard await acquireAudioPlaybackFocus() else { return }
+
+            let sourceGeneration = loadGeneration
+            let commandGeneration = playbackCommandGeneration
+
             do {
                 try await engine.play()
-            } catch {
+
                 guard !isShutdown else {
+                    return
+                }
+                guard loadGeneration == sourceGeneration else {
+                    await reconcileTransportIntent(afterApplyingPlayback: true)
+                    return
+                }
+
+                guard playbackCommandGeneration == commandGeneration,
+                      snapshot.intent == .play
+                else {
+                    await reconcileTransportIntent(afterApplyingPlayback: true)
+                    return
+                }
+            } catch {
+                guard !isShutdown,
+                      loadGeneration == sourceGeneration,
+                      playbackCommandGeneration == commandGeneration,
+                      snapshot.intent == .play
+                else {
                     return
                 }
 
@@ -529,7 +643,8 @@ public final class StreamPlayerController {
                         intent: .pause,
                         currentTime: snapshot.currentTime,
                         duration: snapshot.duration,
-                        failure: failure
+                        failure: failure,
+                        timeline: snapshot.timeline
                     )
                 )
             }
@@ -539,58 +654,10 @@ public final class StreamPlayerController {
     private func handleEngineEvent(
         _ event: PlaybackEngineEvent
     ) {
-        switch event {
-        case .playing:
-            guard snapshot.intent == .play else {
-                return
-            }
-
-            updatePhase(.playing)
-
-        case .waiting:
-            guard snapshot.intent == .play else {
-                return
-            }
-
-            updatePhase(.waiting)
-
-        case .ended:
-            updateSnapshot(
-                PlaybackSnapshot(
-                    phase: .ended,
-                    intent: .pause,
-                    currentTime: snapshot.currentTime,
-                    duration: snapshot.duration
-                )
-            )
-
-        case let .timeUpdated(currentTime, duration):
-            updateSnapshot(
-                PlaybackSnapshot(
-                    phase: snapshot.phase,
-                    intent: snapshot.intent,
-                    currentTime: currentTime,
-                    duration: duration ?? snapshot.duration,
-                    failure: snapshot.failure
-                )
-            )
-
-        case let .failed(failure):
-            updateSnapshot(
-                PlaybackSnapshot(
-                    phase: .failed,
-                    intent: .pause,
-                    currentTime: snapshot.currentTime,
-                    duration: snapshot.duration,
-                    failure: failure
-                )
-            )
-        case .paused:
-            guard [.ready, .playing, .waiting, .paused].contains(snapshot.phase) else {
-                return
-            }
-            updatePhase(.paused)
+        guard let newSnapshot = PlaybackEventReducer.reduce(event, from: snapshot) else {
+            return
         }
+        updateSnapshot(newSnapshot)
     }
 
     // MARK: - Snapshot Updates
@@ -615,7 +682,8 @@ public final class StreamPlayerController {
                 intent: intent,
                 currentTime: snapshot.currentTime,
                 duration: snapshot.duration,
-                failure: snapshot.failure
+                failure: snapshot.failure,
+                timeline: snapshot.timeline
             )
         )
     }
@@ -629,22 +697,112 @@ public final class StreamPlayerController {
                 intent: snapshot.intent,
                 currentTime: snapshot.currentTime,
                 duration: snapshot.duration,
-                failure: snapshot.failure
+                failure: snapshot.failure,
+                timeline: snapshot.timeline
             )
         )
     }
 
+    /// Reapplies the latest controller intent after an older transport call
+    /// completes late. The loop checks generations after each async engine
+    /// operation so a newer command that arrives during reconciliation wins.
+    private func reconcileTransportIntent(
+        afterApplyingPlayback appliedPlayback: Bool? = nil
+    ) async {
+        var appliedPlayback = appliedPlayback
+
+        while !isShutdown {
+            let commandGeneration = playbackCommandGeneration
+            let sourceGeneration = loadGeneration
+            let phaseCanPlay = [PlaybackPhase.ready, .playing, .waiting, .paused]
+                .contains(snapshot.phase)
+            let desiredPlayback = snapshot.intent == .play
+                && phaseCanPlay
+                && audioInterruptionCoordinator.allowsPlaybackStart
+
+            if appliedPlayback == desiredPlayback {
+                return
+            }
+
+            if desiredPlayback {
+                guard await acquireAudioPlaybackFocus() else { return }
+                do {
+                    try await engine.play()
+                    appliedPlayback = true
+                } catch {
+                    guard !isShutdown else { return }
+                    guard commandGeneration == playbackCommandGeneration,
+                          sourceGeneration == loadGeneration else {
+                        appliedPlayback = nil
+                        continue
+                    }
+
+                    guard !(error is CancellationError) else { return }
+
+                    let failure = PlaybackFailureMapping.map(error)
+                    playbackCommandGeneration &+= 1
+                    updateSnapshot(
+                        PlaybackSnapshot(
+                            phase: .failed,
+                            intent: .pause,
+                            currentTime: snapshot.currentTime,
+                            duration: snapshot.duration,
+                            failure: failure,
+                            timeline: snapshot.timeline
+                        )
+                    )
+                    appliedPlayback = nil
+                    continue
+                }
+            } else {
+                await engine.pause()
+                appliedPlayback = false
+            }
+
+            guard !isShutdown else { return }
+            guard commandGeneration == playbackCommandGeneration,
+                  sourceGeneration == loadGeneration else {
+                continue
+            }
+
+            return
+        }
+    }
+
+    private func acquireAudioPlaybackFocus() async -> Bool {
+        guard let audioPlaybackFocusCoordinator else { return true }
+
+        let previousController = audioPlaybackFocusCoordinator.requestFocus(for: self)
+        if let previousController {
+            await previousController.pause()
+        }
+
+        return !isShutdown && audioPlaybackFocusCoordinator.ownsFocus(self)
+    }
+
     // MARK: - Shutdown
+
+    private func beginSeek() -> UInt64 {
+        seekGeneration &+= 1
+        return seekGeneration
+    }
 
     /// Stops playback and releases player resources.
     public func shutdown() async {
+        if let shutdownTask {
+            await shutdownTask.value
+            return
+        }
+
         guard !isShutdown else {
             return
         }
 
         isShutdown = true
+        audioPlaybackFocusCoordinator?.releaseFocus(for: self)
         loadGeneration &+= 1
         playbackCommandGeneration &+= 1
+        seekGeneration &+= 1
 
         activeLoadTask?.cancel()
         activeLoadTask = nil
@@ -656,15 +814,19 @@ public final class StreamPlayerController {
         audioInterruptionTask = nil
         audioInterruptionSource.shutdown()
 
-        await engine.shutdown()
+        let shutdownTask = Task { @MainActor in
+            await engine.shutdown()
 
-        let finalSnapshot = PlaybackSnapshot(
-            phase: .idle,
-            intent: .pause
-        )
+            let finalSnapshot = PlaybackSnapshot(
+                phase: .idle,
+                intent: .pause
+            )
 
-        snapshot = finalSnapshot
-        snapshotBroadcaster.finish(with: finalSnapshot)
+            snapshot = finalSnapshot
+            snapshotBroadcaster.finish(with: finalSnapshot)
+        }
+        self.shutdownTask = shutdownTask
+        await shutdownTask.value
     }
 
     // MARK: - Errors
@@ -697,9 +859,11 @@ public final class StreamPlayerController {
     /// Returns the available audio tracks for the current media source.
     public func availableAudioTracks() async throws -> [MediaTrack] {
         try validateTrackAccess()
+        try Task.checkCancellation()
         let generation = loadGeneration
 
         let tracks = try await engine.availableAudioTracks()
+        try Task.checkCancellation()
 
         guard !isShutdown, loadGeneration == generation else {
             throw CancellationError()
@@ -711,9 +875,11 @@ public final class StreamPlayerController {
     /// Returns the available subtitle tracks for the current media source.
     public func availableSubtitleTracks() async throws -> [MediaTrack] {
         try validateTrackAccess()
+        try Task.checkCancellation()
         let generation = loadGeneration
 
         let tracks = try await engine.availableSubtitleTracks()
+        try Task.checkCancellation()
 
         guard !isShutdown, loadGeneration == generation else {
             throw CancellationError()
@@ -725,9 +891,11 @@ public final class StreamPlayerController {
     /// Selects an audio track by its identifier.
     public func selectAudioTrack(id: String) async throws {
         try validateTrackAccess()
+        try Task.checkCancellation()
         let generation = loadGeneration
 
         try await engine.selectAudioTrack(id: id)
+        try Task.checkCancellation()
 
         guard !isShutdown, loadGeneration == generation else {
             throw CancellationError()
@@ -737,9 +905,11 @@ public final class StreamPlayerController {
     /// Selects a subtitle track, or disables subtitles when `id` is `nil`.
     public func selectSubtitleTrack(id: String?) async throws {
         try validateTrackAccess()
+        try Task.checkCancellation()
         let generation = loadGeneration
 
         try await engine.selectSubtitleTrack(id: id)
+        try Task.checkCancellation()
 
         guard !isShutdown, loadGeneration == generation else {
             throw CancellationError()

@@ -13,6 +13,65 @@ import Testing
 @MainActor
 struct StreamPlayerControllerTests {
 
+    @Test("Declared live presentation kind is visible during loading")
+    func exposesLivePresentationKindDuringLoading() async {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(engine: engine)
+        _ = controller.load(
+            MediaSource(
+                url: URL(string: "https://example.com/live.m3u8")!,
+                presentationKind: .live
+            )
+        )
+
+        #expect(controller.snapshot.phase == .loading)
+        #expect(controller.snapshot.timeline.presentationKind == .live)
+
+        await controller.shutdown()
+    }
+
+    @Test("Live-edge seek forwards the requested behind-live offset")
+    func forwardsLiveEdgeOffset() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(engine: engine)
+        let load = controller.load(
+            MediaSource(
+                url: URL(string: "https://example.com/live.m3u8")!,
+                presentationKind: .live
+            )
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        try await controller.seekToLiveEdge(offsetFromLive: 12)
+
+        #expect(engine.liveEdgeSeekOffsets == [12])
+        await controller.shutdown()
+    }
+
+    @Test("Live-edge seek rejects a source without explicit live semantics")
+    func rejectsLiveEdgeSeekForUnspecifiedSource() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(engine: engine)
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        do {
+            try await controller.seekToLiveEdge()
+            Issue.record("Expected live-edge seek to reject an unclassified source.")
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .unsupportedConfiguration)
+        }
+
+        #expect(engine.liveEdgeSeekOffsets.isEmpty)
+        await controller.shutdown()
+    }
+
     @Test("An event from a previous source must not modify the new source")
     func ignoresEventFromPreviousSource() async throws {
         let engine = MockPlaybackEngine()
@@ -54,11 +113,11 @@ struct StreamPlayerControllerTests {
 
         // Queue an event from A and a valid event from B.
         engine.emit(
-            .timeUpdated(currentTime: 42, duration: 120),
+            .timeUpdated(currentTime: 42, duration: 120, timeline: .init()),
             fromLoad: 1
         )
         engine.emit(
-            .timeUpdated(currentTime: 5, duration: 120),
+            .timeUpdated(currentTime: 5, duration: 120, timeline: .init()),
             fromLoad: 2
         )
         engine.deliverQueuedEvents()
@@ -181,6 +240,72 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("A late play completion cannot undo a newer pause")
+    func latePlayCompletionCannotUndoPause() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        engine.suspendNextPlay()
+        let playTask = Task {
+            try await controller.play()
+        }
+        await engine.waitForPendingPlay()
+
+        await controller.pause()
+        #expect(!engine.isPlaying)
+
+        // The mock applies the delayed play when it completes, modeling an
+        // engine whose async play operation can take effect after suspension.
+        engine.completePendingPlay()
+        try await playTask.value
+
+        #expect(!engine.isPlaying)
+        #expect(controller.snapshot.intent == .pause)
+        await controller.shutdown()
+    }
+
+    @Test("Shutdown cancels a pending play and leaves the engine idle")
+    func shutdownDuringPendingPlayLeavesEngineIdle() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        engine.suspendNextPlay()
+        let playTask = Task {
+            try await controller.play()
+        }
+        await engine.waitForPendingPlay()
+
+        await controller.shutdown()
+
+        do {
+            try await playTask.value
+            Issue.record("The pending play unexpectedly succeeded after shutdown.")
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .playback)
+        }
+
+        #expect(!engine.isPlaying)
+        #expect(controller.snapshot.phase == .idle)
+    }
+
     @Test("A late play failure from a replaced source cannot fail the new source")
     func latePlayFailureDoesNotFailReplacementSource() async throws {
         let engine = MockPlaybackEngine()
@@ -224,6 +349,48 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("A late play from a replaced source does not start the replacement")
+    func latePlayCompletionDoesNotStartReplacementSource() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let firstLoad = controller.load(
+            MediaSource(url: URL(string: "https://example.com/first.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await firstLoad.waitUntilReady()
+
+        engine.suspendNextPlay()
+        let playTask = Task {
+            try await controller.play()
+        }
+        await engine.waitForPendingPlay()
+
+        let replacementLoad = controller.load(
+            MediaSource(url: URL(string: "https://example.com/replacement.m3u8")!)
+        )
+        await engine.waitForLoad(id: 2)
+        engine.completeLoad(id: 2)
+        try await replacementLoad.waitUntilReady()
+
+        engine.completePendingPlay()
+        do {
+            try await playTask.value
+            Issue.record("The old play unexpectedly succeeded for a replacement source.")
+        } catch is CancellationError {
+            // Expected: the play request belongs to the previous source.
+        }
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .pause)
+        #expect(!engine.isPlaying)
+        await controller.shutdown()
+    }
+
     @Test("Play after finite media ends seeks to the beginning before resuming")
     func playAfterEndRestartsFiniteMedia() async throws {
         let engine = MockPlaybackEngine()
@@ -238,7 +405,7 @@ struct StreamPlayerControllerTests {
         engine.completeLoad(id: 1)
         try await handle.waitUntilReady()
 
-        engine.emit(.timeUpdated(currentTime: 30, duration: 30), fromLoad: 1)
+        engine.emit(.timeUpdated(currentTime: 30, duration: 30, timeline: .init()), fromLoad: 1)
         engine.emit(.ended, fromLoad: 1)
         engine.deliverQueuedEvents()
         await waitForPhase(.ended, controller: controller)
@@ -271,7 +438,7 @@ struct StreamPlayerControllerTests {
         engine.completeLoad(id: 1)
         try await handle.waitUntilReady()
 
-        engine.emit(.timeUpdated(currentTime: 30, duration: 30), fromLoad: 1)
+        engine.emit(.timeUpdated(currentTime: 30, duration: 30, timeline: .init()), fromLoad: 1)
         engine.emit(.ended, fromLoad: 1)
         engine.deliverQueuedEvents()
         await waitForPhase(.ended, controller: controller)
@@ -301,7 +468,7 @@ struct StreamPlayerControllerTests {
         engine.completeLoad(id: 1)
         try await handle.waitUntilReady()
 
-        engine.emit(.timeUpdated(currentTime: 30, duration: nil), fromLoad: 1)
+        engine.emit(.timeUpdated(currentTime: 30, duration: nil, timeline: .init()), fromLoad: 1)
         engine.emit(.ended, fromLoad: 1)
         engine.deliverQueuedEvents()
         await waitForPhase(.ended, controller: controller)
@@ -348,6 +515,89 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("A pause during suspended autoplay remains the final engine command")
+    func pauseDuringSuspendedAutoplayRemainsEffective() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: true),
+            engine: engine
+        )
+
+        engine.suspendNextPlay()
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        await engine.waitForPendingPlay()
+
+        await controller.pause()
+        engine.completePendingPlay()
+        try await load.waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .pause)
+        #expect(!engine.isPlaying)
+        await controller.shutdown()
+    }
+
+    @Test("A late pause completion cannot override a newer play request")
+    func latePauseCompletionReconcilesToLatestPlayIntent() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(engine: engine)
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+        try await controller.play()
+
+        engine.suspendNextPause()
+        let pauseTask = Task { await controller.pause() }
+        await engine.waitForPendingPause()
+
+        try await controller.play()
+        #expect(controller.snapshot.intent == .play)
+
+        engine.completePendingPause()
+        await pauseTask.value
+
+        #expect(controller.snapshot.intent == .play)
+        #expect(engine.isPlaying)
+        #expect(engine.playCallCount == 3)
+        await controller.shutdown()
+    }
+
+    @Test("A late autoplay failure cannot fail a source after explicit pause")
+    func lateAutoplayFailureDoesNotFailPausedSource() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: true),
+            engine: engine
+        )
+
+        engine.suspendNextPlay()
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        await engine.waitForPendingPlay()
+
+        await controller.pause()
+        engine.failPendingPlay(
+            with: PlaybackFailure(code: .playback, message: "Stale autoplay failure")
+        )
+
+        try await load.waitUntilReady()
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .pause)
+        #expect(controller.snapshot.failure == nil)
+        #expect(!engine.isPlaying)
+        await controller.shutdown()
+    }
+
     @Test("Audio interruptions pause playback and resume when the system allows it")
     func resumesAfterAllowedAudioInterruption() async throws {
         let engine = MockPlaybackEngine()
@@ -381,6 +631,122 @@ struct StreamPlayerControllerTests {
         #expect(controller.snapshot.intent == .play)
         await controller.shutdown()
         #expect(interruptionSource.shutdownCallCount == 1)
+    }
+
+    @Test("A late interruption-resume failure cannot replace an explicit pause")
+    func lateInterruptionResumeFailureDoesNotReplacePause() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(engine: engine)
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: controller)
+
+        await controller.handleAudioSessionInterruption(.began)
+        engine.suspendNextPlay()
+        let resumeTask = Task {
+            await controller.handleAudioSessionInterruption(
+                .ended(systemAllowsResume: true)
+            )
+        }
+        await engine.waitForPendingPlay()
+
+        // A newer user command supersedes the pending automatic resume.
+        await controller.pause()
+        engine.failPendingPlay(
+            with: PlaybackFailure(code: .playback, message: "Late resume failure")
+        )
+        await resumeTask.value
+
+        #expect(controller.snapshot.phase == .paused)
+        #expect(controller.snapshot.intent == .pause)
+        #expect(controller.snapshot.failure == nil)
+        await controller.shutdown()
+    }
+
+    @Test("A late interruption resume cannot undo an explicit pause")
+    func lateInterruptionResumeCannotUndoPause() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(engine: engine)
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: controller)
+
+        await controller.handleAudioSessionInterruption(.began)
+        engine.suspendNextPlay()
+        let resumeTask = Task {
+            await controller.handleAudioSessionInterruption(
+                .ended(systemAllowsResume: true)
+            )
+        }
+        await engine.waitForPendingPlay()
+
+        await controller.pause()
+        engine.completePendingPlay()
+        await resumeTask.value
+
+        #expect(!engine.isPlaying)
+        #expect(controller.snapshot.intent == .pause)
+        await controller.shutdown()
+    }
+
+    @Test("An interruption resume from a replaced source cannot start the new source")
+    func lateInterruptionResumeCannotStartReplacementSource() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let firstLoad = controller.load(
+            MediaSource(url: URL(string: "https://example.com/first.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await firstLoad.waitUntilReady()
+
+        try await controller.play()
+        engine.emit(.playing, fromLoad: 1)
+        engine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: controller)
+
+        await controller.handleAudioSessionInterruption(.began)
+        engine.suspendNextPlay()
+        let resumeTask = Task {
+            await controller.handleAudioSessionInterruption(
+                .ended(systemAllowsResume: true)
+            )
+        }
+        await engine.waitForPendingPlay()
+
+        let replacementLoad = controller.load(
+            MediaSource(url: URL(string: "https://example.com/replacement.m3u8")!)
+        )
+        await engine.waitForLoad(id: 2)
+        engine.completeLoad(id: 2)
+        try await replacementLoad.waitUntilReady()
+
+        engine.completePendingPlay()
+        await resumeTask.value
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .pause)
+        #expect(!engine.isPlaying)
+        await controller.shutdown()
     }
 
     @Test("Audio interruption does not resume when the system disallows it")
@@ -510,8 +876,15 @@ struct StreamPlayerControllerTests {
         engine.completeLoad(id: 1)
         try await handle.waitUntilReady()
 
+        let timeline = PlaybackTimeline(
+            seekableRanges: [
+                PlaybackTimeRange(start: 120, end: 150),
+                PlaybackTimeRange(start: 180, end: 210)
+            ],
+            currentDate: Date(timeIntervalSince1970: 1_798_000_000)
+        )
         engine.emit(
-            .timeUpdated(currentTime: 37, duration: nil),
+            .timeUpdated(currentTime: 37, duration: nil, timeline: timeline),
             fromLoad: 1
         )
         engine.deliverQueuedEvents()
@@ -520,6 +893,21 @@ struct StreamPlayerControllerTests {
 
         #expect(controller.snapshot.currentTime == 37)
         #expect(controller.snapshot.duration == nil)
+        #expect(controller.snapshot.timeline == timeline)
+
+        try await controller.play()
+        await controller.pause()
+        #expect(controller.snapshot.timeline == timeline)
+
+        let seekTask = Task {
+            try await controller.seek(to: 195)
+        }
+        await engine.waitForSeek(id: 1)
+        engine.completeSeek(id: 1)
+        try await seekTask.value
+        #expect(controller.snapshot.currentTime == 195)
+        #expect(controller.snapshot.timeline.seekableRanges == timeline.seekableRanges)
+        #expect(controller.snapshot.timeline.currentDate == nil)
 
         await controller.shutdown()
     }
@@ -760,6 +1148,49 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("An older seek cannot overwrite a newer seek on the same source")
+    func olderSeekCannotOverwriteNewerSeek() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.mp4")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        let earlierSeek = Task {
+            try await controller.seek(to: 42)
+        }
+        await engine.waitForSeek(id: 1)
+
+        let laterSeek = Task {
+            try await controller.seek(to: 84)
+        }
+        await engine.waitForSeek(id: 2)
+
+        // Force the later request to complete first, then let the earlier
+        // operation return after it has already been superseded.
+        engine.completeSeek(id: 2)
+        try await laterSeek.value
+        #expect(controller.snapshot.currentTime == 84)
+
+        engine.completeSeek(id: 1)
+        do {
+            try await earlierSeek.value
+            Issue.record("The earlier seek unexpectedly succeeded after being superseded.")
+        } catch is CancellationError {
+            // Expected: only the most recently requested seek may commit.
+        }
+
+        #expect(controller.snapshot.currentTime == 84)
+        await controller.shutdown()
+    }
+
     @Test("Shutdown during loading leaves the controller idle")
     func shutdownDuringLoadingLeavesControllerIdle() async throws {
         let engine = MockPlaybackEngine()
@@ -803,6 +1234,52 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
 
         #expect(controller.snapshot.phase == .idle)
+    }
+
+    @Test("Concurrent shutdown callers wait for the same engine cleanup")
+    func concurrentShutdownWaitsForEngineCleanup() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.mp4")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+        #expect(controller.snapshot.phase == .ready)
+
+        engine.suspendNextShutdown()
+        var firstReturned = false
+        var secondReturned = false
+
+        let firstShutdown = Task {
+            await controller.shutdown()
+            firstReturned = true
+        }
+        await engine.waitForShutdownCall()
+
+        let secondShutdown = Task {
+            await controller.shutdown()
+            secondReturned = true
+        }
+        await Task.yield()
+
+        #expect(!firstReturned)
+        #expect(!secondReturned)
+        #expect(engine.shutdownCallCount == 1)
+        #expect(controller.snapshot.phase == .ready)
+
+        engine.completeShutdown()
+        await firstShutdown.value
+        await secondShutdown.value
+
+        #expect(firstReturned)
+        #expect(secondReturned)
+        #expect(controller.snapshot.phase == .idle)
+        #expect(controller.snapshot.intent == .pause)
     }
 
     @Test("Shutdown cancels a suspended seek")
@@ -1066,6 +1543,46 @@ struct StreamPlayerControllerTests {
         await controller.shutdown()
     }
 
+    @Test("Cancelled audio-track discovery does not return loaded results")
+    func cancelledAudioTrackDiscoveryThrowsCancellation() async throws {
+        let engine = MockPlaybackEngine()
+        engine.audioTracks = [
+            MediaTrack(
+                id: "audio:0",
+                type: .audio,
+                name: "English",
+                languageCode: nil
+            )
+        ]
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        engine.suspendNextAudioTrackQuery()
+        let queryTask = Task {
+            try await controller.availableAudioTracks()
+        }
+        await engine.waitForPendingAudioTrackQuery()
+        queryTask.cancel()
+        engine.completePendingAudioTrackQuery()
+
+        do {
+            _ = try await queryTask.value
+            Issue.record("The cancelled track query unexpectedly returned results.")
+        } catch is CancellationError {
+            // Expected: cancellation is checked after the async engine call.
+        }
+
+        await controller.shutdown()
+    }
+
     @Test("Controller forwards audio and subtitle selection")
     func forwardsTrackSelection() async throws {
         let engine = MockPlaybackEngine()
@@ -1268,6 +1785,50 @@ struct StreamPlayerControllerTests {
         #expect(controller2.snapshot.phase == .playing)
 
         await controller2.shutdown()
+    }
+
+    @Test("A shared audio focus coordinator pauses the previously focused player")
+    func sharedAudioFocusPausesPreviousController() async throws {
+        let focusCoordinator = AudioPlaybackFocusCoordinator()
+        let firstEngine = MockPlaybackEngine()
+        let secondEngine = MockPlaybackEngine()
+        let firstController = StreamPlayerController(
+            engine: firstEngine,
+            audioPlaybackFocusCoordinator: focusCoordinator
+        )
+        let secondController = StreamPlayerController(
+            engine: secondEngine,
+            audioPlaybackFocusCoordinator: focusCoordinator
+        )
+
+        let firstLoad = firstController.load(
+            MediaSource(url: URL(string: "https://example.com/first.m3u8")!)
+        )
+        let secondLoad = secondController.load(
+            MediaSource(url: URL(string: "https://example.com/second.m3u8")!)
+        )
+        await firstEngine.waitForLoad(id: 1)
+        await secondEngine.waitForLoad(id: 1)
+        firstEngine.completeLoad(id: 1)
+        secondEngine.completeLoad(id: 1)
+        try await firstLoad.waitUntilReady()
+        try await secondLoad.waitUntilReady()
+
+        try await firstController.play()
+        firstEngine.emit(.playing, fromLoad: 1)
+        firstEngine.deliverQueuedEvents()
+        await waitForPhase(.playing, controller: firstController)
+
+        try await secondController.play()
+
+        #expect(!firstEngine.isPlaying)
+        #expect(firstController.snapshot.phase == .paused)
+        #expect(firstController.snapshot.intent == .pause)
+        #expect(secondEngine.isPlaying)
+        #expect(secondController.snapshot.intent == .play)
+
+        await firstController.shutdown()
+        await secondController.shutdown()
     }
 
     // MARK: - Playback Rate

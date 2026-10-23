@@ -5,6 +5,7 @@
 //  Created by Iheb on 12/10/2026.
 //
 
+import Foundation
 import Testing
 @testable import StreamKit
 
@@ -56,6 +57,67 @@ struct PlaybackSnapshotTests {
         )
 
         #expect(snapshot.duration == nil)
+    }
+
+    @Test("Preserves discontinuous seekable timeline ranges")
+    func preservesSeekableTimeline() {
+        let timeline = PlaybackTimeline(
+            seekableRanges: [
+                PlaybackTimeRange(start: 120, end: 150),
+                PlaybackTimeRange(start: 180, end: 210)
+            ],
+            currentDate: Date(timeIntervalSince1970: 1_798_000_000),
+            presentationKind: .live
+        )
+        let snapshot = PlaybackSnapshot(
+            phase: .playing,
+            intent: .play,
+            currentTime: 195,
+            duration: nil,
+            timeline: timeline
+        )
+
+        #expect(snapshot.timeline == timeline)
+        #expect(snapshot.timeline.seekableRanges.count == 2)
+        #expect(snapshot.timeline.currentDate == timeline.currentDate)
+        #expect(snapshot.timeline.presentationKind == .live)
+        #expect(snapshot.timeline.latestSeekableTime == 210)
+        #expect(snapshot.timeline.containsSeekableTime(120))
+        #expect(snapshot.timeline.containsSeekableTime(200))
+        #expect(!snapshot.timeline.containsSeekableTime(150))
+        #expect(!snapshot.timeline.containsSeekableTime(170))
+        #expect(!snapshot.timeline.containsSeekableTime(.nan))
+    }
+
+    @Test("Does not infer a live edge for unspecified or on-demand media")
+    func liveEdgeRequiresExplicitLiveClassification() {
+        let ranges = [PlaybackTimeRange(start: 0, end: 100)]
+
+        #expect(PlaybackTimeline(seekableRanges: ranges).latestSeekableTime == nil)
+        #expect(PlaybackTimeline(
+            seekableRanges: ranges,
+            presentationKind: .onDemand
+        ).latestSeekableTime == nil)
+    }
+
+    @Test("Snapshots with different seekable ranges are unequal")
+    func snapshotsWithDifferentSeekableRangesAreUnequal() {
+        let first = PlaybackSnapshot(
+            phase: .playing,
+            intent: .play,
+            timeline: PlaybackTimeline(
+                seekableRanges: [PlaybackTimeRange(start: 0, end: 60)]
+            )
+        )
+        let second = PlaybackSnapshot(
+            phase: .playing,
+            intent: .play,
+            timeline: PlaybackTimeline(
+                seekableRanges: [PlaybackTimeRange(start: 30, end: 90)]
+            )
+        )
+
+        #expect(first != second)
     }
 
     @Test("Identical snapshots are equal")
