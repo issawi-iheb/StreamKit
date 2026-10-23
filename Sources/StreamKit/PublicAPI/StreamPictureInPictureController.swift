@@ -94,15 +94,40 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     /// Invalidates queued KVO updates from replaced controllers.
     private var controllerGeneration: UInt64 = 0
 
-    private let restorationHandler: StreamPictureInPictureRestorationHandler
+    /// What happens when PiP ends while the app is in the background.
+    public var dismissalBehavior: StreamPictureInPictureDismissalBehavior = .pausePlayback
 
-    public init(
+    /// The player whose video surface this coordinator presents.
+    private weak var playbackController: StreamPlayerController?
+
+    /// Injectable for deterministic policy tests.
+    private let isApplicationInBackground: @MainActor () -> Bool
+
+    /// Prevents host-requested stops from triggering dismissal pausing.
+    private var stopRequestedByHost = false
+    
+    /// Restores the host app's playback interface when PiP stops.
+    public var restorationHandler: StreamPictureInPictureRestorationHandler
+
+    public convenience init(
         restorationHandler: @escaping StreamPictureInPictureRestorationHandler = { completion in
             completion(false)
         }
     ) {
+        self.init(
+            restorationHandler: restorationHandler,
+            isApplicationInBackground:
+                PictureInPictureDismissalPolicy.systemApplicationIsInBackground
+        )
+    }
+
+    init(
+        restorationHandler: @escaping StreamPictureInPictureRestorationHandler,
+        isApplicationInBackground: @escaping @MainActor () -> Bool
+    ) {
         isSupported = AVPictureInPictureController.isPictureInPictureSupported()
         self.restorationHandler = restorationHandler
+        self.isApplicationInBackground = isApplicationInBackground
         super.init()
     }
 
@@ -117,6 +142,7 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
         }
 
         // Keep the exact source layer alive until start succeeds or fails.
+        stopRequestedByHost = false
         protectedLayer = layer
         state = .starting
         controller.startPictureInPicture()
@@ -126,10 +152,14 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     public func stopPictureInPicture() {
         switch state {
         case .starting:
+            stopRequestedByHost = true
             stopRequestedWhileStarting = true
+
         case .active:
+            stopRequestedByHost = true
             state = .stopping
             pictureInPictureController?.stopPictureInPicture()
+
         case .idle, .stopping:
             break
         }
@@ -158,6 +188,15 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
         }
     }
 
+    func bind(to controller: StreamPlayerController) {
+        guard playbackController !== controller,
+              !isPictureInPictureSessionInProgress else {
+            return
+        }
+
+        playbackController = controller
+    }
+
     /// Registers a surface. The latest mounted surface is preferred when safe
     /// to switch controllers.
     func attach(to layer: AVPlayerLayer) {
@@ -181,7 +220,9 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     func detach(from layer: AVPlayerLayer) {
         if isPictureInPictureSessionInProgress,
            attachedLayer === layer {
-            // Preserve the active PiP source until AVKit confirms the stop.
+            // Remove the unmounted surface from future selection,
+            // but retain the active PiP source until AVKit stops.
+            unregister(layer)
             return
         }
 
@@ -307,6 +348,7 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     private func finishPictureInPictureTransition() {
         state = .idle
         stopRequestedWhileStarting = false
+        stopRequestedByHost = false
         protectedLayer = nil
         resumeStopWaiters()
 
@@ -359,7 +401,28 @@ extension StreamPictureInPictureController: AVPictureInPictureControllerDelegate
             return
         }
 
+        let shouldPause = PictureInPictureDismissalPolicy(
+            behavior: dismissalBehavior,
+            isApplicationInBackground: isApplicationInBackground
+        ).shouldPausePlayback(
+            stopRequestedByHost: stopRequestedByHost
+        )
+
+        let controller = playbackController
+
         finishPictureInPictureTransition()
+
+        if shouldPause, let controller {
+            Task { @MainActor in
+                do {
+                    try await controller.pause()
+                } catch is CancellationError {
+                    // Playback was already cancelled.
+                } catch {
+                    // Playback failure is reported through the player API.
+                }
+            }
+        }
     }
 
     public func pictureInPictureController(
@@ -382,8 +445,11 @@ extension StreamPictureInPictureController: AVPictureInPictureControllerDelegate
             return
         }
 
-        let completionGate = StreamPictureInPictureRestorationCompletion(completionHandler)
-        restorationHandler { restored in
+        let completionGate = StreamPictureInPictureRestorationCompletion(
+            completionHandler
+        )
+
+        self.restorationHandler { restored in
             completionGate.call(restored)
         }
     }

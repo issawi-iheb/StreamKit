@@ -49,6 +49,7 @@ private struct StreamPlayerLayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerLayerUIView {
         let view = PlayerLayerUIView()
+        pictureInPictureController?.bind(to: controller)
         view.pictureInPictureController = pictureInPictureController
         view.updatePlayer(controller.renderingPlayer)
         return view
@@ -58,6 +59,7 @@ private struct StreamPlayerLayerView: UIViewRepresentable {
         _ uiView: PlayerLayerUIView,
         context: Context
     ) {
+        pictureInPictureController?.bind(to: controller)
         uiView.pictureInPictureController = pictureInPictureController
         uiView.updatePlayer(controller.renderingPlayer)
     }
@@ -144,14 +146,14 @@ private final class PlayerLayerUIView: UIView {
         let isPictureInPictureSessionInProgress =
             pictureInPictureController?.isPictureInPictureSessionInProgress == true
 
-        pictureInPictureStateObservation?.cancel()
-        pictureInPictureStateObservation = nil
-
         if isPictureInPictureSessionInProgress {
-            // The PiP controller must retain ownership of its source layer
-            // until AVKit confirms that the session has stopped.
+            // Keep the source layer and state observation alive until PiP ends.
+            // The PiP controller owns the layer handoff and cleanup.
             return
         }
+
+        pictureInPictureStateObservation?.cancel()
+        pictureInPictureStateObservation = nil
 
         pictureInPictureController?.detach(from: playerLayer)
         pictureInPictureController = nil

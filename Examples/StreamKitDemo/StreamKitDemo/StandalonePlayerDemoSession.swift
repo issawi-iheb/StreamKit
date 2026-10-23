@@ -1,3 +1,4 @@
+
 import Combine
 import StreamKit
 import SwiftUI
@@ -6,40 +7,51 @@ import SwiftUI
 @MainActor
 final class StandalonePlayerDemoSession: ObservableObject {
     @Published private(set) var playerController = StreamPlayerController()
-    @Published private(set) var pictureInPictureController:
-        StreamPictureInPictureController
-    @Published private(set) var snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
+    @Published private(set) var pictureInPictureController: StreamPictureInPictureController
+    @Published private(set) var snapshot = PlaybackSnapshot(
+        phase: .idle,
+        intent: .pause
+    )
     @Published private(set) var errorMessage: String?
+
     private let restorationCoordinator = PresentationDemoRestorationCoordinator()
+    private var pictureInPictureStateTask: AnyCancellable?
 
     let trackState = PlayerTrackState()
 
     private let sourceURL = URL(
         string: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8"
     )!
+
     private var isPlayerRouteVisible = false
     private var hasPresentedPlayerRoute = false
     private var isShutdown = false
     private var isShuttingDown = false
     private var sessionGeneration = UUID()
+
     private var loadHandle: LoadHandle?
     private var loadTask: Task<Void, Never>?
     private var snapshotTask: Task<Void, Never>?
+
     var requestPlayerRoute: (@MainActor () -> Void)?
 
     init() {
-        let restorationCoordinator = self.restorationCoordinator
+        let coordinator = restorationCoordinator
 
-        self.pictureInPictureController = StreamPictureInPictureController(
+        pictureInPictureController = StreamPictureInPictureController(
             restorationHandler: { completion in
-                restorationCoordinator.restorePlayerInterface(completion)
+                coordinator.restorePlayerInterface(completion)
             }
         )
 
         restorationCoordinator.requestPlayerRoute = { [weak self] in
             self?.requestPlayerRoute?()
         }
+
+        observePictureInPictureState()
     }
+
+    // MARK: - Player route lifecycle
 
     func playerRouteDidAppear() {
         isPlayerRouteVisible = true
@@ -58,7 +70,9 @@ final class StandalonePlayerDemoSession: ObservableObject {
 
         // Keep the playback controller alive while PiP or restoration
         // may still depend on the existing playback session.
-        guard pictureInPictureController.state == .idle else { return }
+        guard pictureInPictureController.state == .idle else {
+            return
+        }
 
         Task { @MainActor [weak self] in
             guard let self,
@@ -68,33 +82,79 @@ final class StandalonePlayerDemoSession: ObservableObject {
                 return
             }
 
-            await self.playerController.pause()
+            await self.shutdownIfRouteAndPiPAreInactive()
         }
     }
 
+    // MARK: - Picture in Picture observation
+
+    private func observePictureInPictureState() {
+        pictureInPictureStateTask?.cancel()
+
+        pictureInPictureStateTask = pictureInPictureController
+            .$state
+            .removeDuplicates()
+            .sink { [weak self] state in
+                guard state == .idle else {
+                    return
+                }
+
+                Task { @MainActor [weak self] in
+                    guard let self,
+                          self.hasPresentedPlayerRoute,
+                          !self.isPlayerRouteVisible,
+                          self.pictureInPictureController.state == .idle
+                    else {
+                        return
+                    }
+
+                    await self.shutdownIfRouteAndPiPAreInactive()
+                }
+            }
+    }
+
+    // MARK: - Playback snapshots
+
     private func observeSnapshots() {
-        guard snapshotTask == nil else { return }
+        guard snapshotTask == nil else {
+            return
+        }
+
         let controller = playerController
         let generation = sessionGeneration
+
         snapshotTask = Task { [weak self] in
             for await snapshot in controller.snapshots {
                 guard !Task.isCancelled,
                       let self,
-                      self.sessionGeneration == generation else { return }
+                      self.sessionGeneration == generation
+                else {
+                    return
+                }
+
                 self.snapshot = snapshot
             }
         }
     }
 
+    // MARK: - Loading and playback
+
     private func loadAndPlayIfNeeded() {
         guard loadTask == nil,
-              playerController.snapshot.phase == .idle else { return }
+              playerController.snapshot.phase == .idle
+        else {
+            return
+        }
 
         let controller = playerController
         let sourceURL = sourceURL
         let generation = sessionGeneration
+
         loadTask = Task { [weak self] in
-            guard let self else { return }
+            guard let self else {
+                return
+            }
+
             defer {
                 if self.sessionGeneration == generation {
                     self.loadTask = nil
@@ -103,51 +163,88 @@ final class StandalonePlayerDemoSession: ObservableObject {
 
             do {
                 try await DemoPlaybackAudioSession.configureAndActivate()
-                guard !Task.isCancelled else { return }
+
+                guard !Task.isCancelled,
+                      self.sessionGeneration == generation
+                else {
+                    return
+                }
 
                 self.trackState.prepareForNewSource()
-                let handle = controller.load(MediaSource(url: sourceURL))
+
+                let handle = controller.load(
+                    MediaSource(url: sourceURL)
+                )
+
                 guard self.sessionGeneration == generation else {
                     handle.cancel()
                     return
                 }
+
                 self.loadHandle = handle
+
                 defer {
                     if self.sessionGeneration == generation {
                         self.loadHandle = nil
                     }
                 }
+
                 try await handle.waitUntilReady()
 
                 guard !Task.isCancelled,
-                      self.sessionGeneration == generation else { return }
+                      self.sessionGeneration == generation
+                else {
+                    return
+                }
+
                 try await controller.play()
             } catch {
                 guard !Task.isCancelled,
-                      self.sessionGeneration == generation else { return }
+                      self.sessionGeneration == generation
+                else {
+                    return
+                }
+
                 self.errorMessage = error.localizedDescription
             }
         }
     }
 
+    // MARK: - Shutdown
+
     private func shutdownIfRouteAndPiPAreInactive() async {
-        guard !isPlayerRouteVisible,
+        guard hasPresentedPlayerRoute,
+              !isPlayerRouteVisible,
               pictureInPictureController.state == .idle,
               !isShutdown,
-              !isShuttingDown else { return }
+              !isShuttingDown
+        else {
+            return
+        }
 
         isShuttingDown = true
+
         let generation = sessionGeneration
         let controller = playerController
+
         loadTask?.cancel()
         loadHandle?.cancel()
+
         await controller.shutdown()
-        guard sessionGeneration == generation else { return }
+
+        guard sessionGeneration == generation else {
+            isShuttingDown = false
+            return
+        }
+
         snapshotTask?.cancel()
         snapshotTask = nil
+
         isShutdown = true
         isShuttingDown = false
     }
+
+    // MARK: - Session recreation
 
     private func createFreshSession() {
         sessionGeneration = UUID()
@@ -155,21 +252,32 @@ final class StandalonePlayerDemoSession: ObservableObject {
         snapshotTask?.cancel()
         loadTask?.cancel()
         loadHandle?.cancel()
+        pictureInPictureStateTask?.cancel()
 
         snapshotTask = nil
         loadTask = nil
         loadHandle = nil
+        pictureInPictureStateTask = nil
 
         playerController = StreamPlayerController()
         pictureInPictureController = makePictureInPictureController()
 
-        snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
+        // Observe the new controller, not the previous instance.
+        observePictureInPictureState()
+
+        snapshot = PlaybackSnapshot(
+            phase: .idle,
+            intent: .pause
+        )
         errorMessage = nil
+
         trackState.prepareForNewSource()
 
         isShutdown = false
         isShuttingDown = false
     }
+
+    // MARK: - Interface restoration
 
     func playerInterfaceDidAppear() {
         restorationCoordinator.playerInterfaceDidAppear()

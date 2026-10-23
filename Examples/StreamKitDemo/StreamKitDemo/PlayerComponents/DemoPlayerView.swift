@@ -26,7 +26,7 @@ struct DemoPlayerView: View {
 
     @State private var playbackRate: Float = 1.0
     @State private var playbackRateError: String?
-    @State private var shouldResumeAfterPictureInPicture = false
+    //@State private var shouldResumeAfterPictureInPicture = false
     @State private var pictureInPictureState: StreamPictureInPictureState = .idle
 
     private let playbackRates: [Float] = [
@@ -127,6 +127,7 @@ struct DemoPlayerView: View {
                 controlsVisible = false
             }
         }
+
         .onReceive(
             pictureInPictureController?.$state.eraseToAnyPublisher()
                 ?? Just(.idle).eraseToAnyPublisher()
@@ -141,45 +142,14 @@ struct DemoPlayerView: View {
 
             pictureInPictureState = newState
 
-            if isActive {
-                if !wasActive {
-                    shouldResumeAfterPictureInPicture =
-                        controller.snapshot.intent == .play &&
-                        (
-                            controller.snapshot.phase == .playing ||
-                            controller.snapshot.phase == .waiting
-                        )
-                }
+            // Hide controls while PiP is active.
+            guard wasActive, !isActive else {
                 return
             }
 
-            // Only handle the transition from an active PiP session to idle.
-            guard wasActive else {
-                return
-            }
-
+            // PiP has ended. Restore the controls without changing playback.
             withAnimation(.easeInOut(duration: 0.2)) {
                 controlsVisible = true
-            }
-
-            guard shouldResumeAfterPictureInPicture else {
-                return
-            }
-
-            shouldResumeAfterPictureInPicture = false
-
-            guard controller.snapshot.intent == .play else {
-                return
-            }
-
-            Task {
-                do {
-                    try await controller.play()
-                } catch is CancellationError {
-                    // Cancellation is expected during task teardown.
-                } catch {
-                    print("Failed to resume playback after PiP: \(error)")
-                }
             }
         }
     }
