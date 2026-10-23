@@ -20,12 +20,13 @@ The package declares iOS 16 support. The demo project currently targets iOS 26.5
 
 ## Choose Your Player Surface
 
-StreamKit offers two rendering paths for the same playback controller:
+StreamKit offers three integration levels:
 
-- **`StreamVideoView`** renders video only. Use it when your app owns playback controls and layout.
-- **`StreamAVPlayerView`** presents AVKit's standard controls. Use it when you want Apple's player interface, AirPlay affordances, and AVKit-managed Picture in Picture.
+- **Managed player:** `StreamPlayerSession` plus `StreamPlayerView` loads a `MediaSource` and presents AVKit's standard controls and Picture in Picture.
+- **App-owned controls:** `StreamPlayerController` plus `StreamVideoView` gives your app direct control over layout and playback controls.
+- **Advanced AVKit integration:** use `StreamAVPlayerView` with a controller and presentation controller when your app needs to own presentation and restoration lifecycles directly.
 
-Start with `StreamVideoView` for a custom player experience. The Quick Start below loads a URL, displays the video, and explicitly starts playback. For the AVKit path and its presentation lifecycle, see [System Player, Picture in Picture, and Fullscreen](#system-player-picture-in-picture-and-fullscreen).
+Start with the managed player for the fewest setup steps. Use `StreamVideoView` when you need app-owned controls. For the lower-level AVKit lifecycle, see [System Player, Picture in Picture, and Fullscreen](#system-player-picture-in-picture-and-fullscreen).
 
 ## Quick Start
 
@@ -34,58 +35,96 @@ import StreamKit
 import SwiftUI
 
 @MainActor
-struct BasicPlayerView: View {
-    let url: URL
-
-    @State private var controller = StreamPlayerController()
-    @State private var snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
-    @State private var errorMessage: String?
+struct PlayerRoute: View {
+    let source: MediaSource
 
     var body: some View {
-        VStack(spacing: 12) {
-            StreamVideoView(controller: controller)
-                .frame(height: 240)
-
-            Button(snapshot.intent == .play ? "Pause" : "Play") {
-                Task {
-                    do {
-                        if snapshot.intent == .play {
-                            await controller.pause()
-                        } else {
-                            try await controller.play()
-                        }
-                    } catch {
-                        errorMessage = error.localizedDescription
-                    }
-                }
-            }
-            .disabled(snapshot.phase == .idle || snapshot.phase == .loading)
-
-            if let errorMessage {
-                Text(errorMessage).foregroundStyle(.red)
-            }
-        }
-        .task {
-            for await updatedSnapshot in controller.snapshots {
-                snapshot = updatedSnapshot
-            }
-        }
-        .task {
-            do {
-                try await controller.load(MediaSource(url: url)).waitUntilReady()
-                try await controller.play()
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-        .onDisappear {
-            Task { await controller.shutdown() }
-        }
+        StreamPlayerView(source: source)
     }
 }
 ```
 
-`PlayerConfiguration` defaults to `autoplay: false`, so the example starts playback after the item is ready. In a navigable app, keep the controller in a session owner above the player route if playback or Picture in Picture must survive route changes.
+Create the route with `PlayerRoute(source: MediaSource(url: videoURL))`. This is the normal VOD path: the managed view loads the source automatically, and AVKit's standard controls let the viewer start playback. The managed surface does not select or limit media features. Configure the `MediaSource` first, then pass it in; VOD/live semantics, cookies, user agent, bearer authentication, and FairPlay all travel through the same source configuration used by `StreamPlayerController`.
+
+### Choose VOD or live
+
+Mark live content explicitly. StreamKit does not infer it from duration or seekable ranges; `.live` enables live timeline semantics and live-edge seeking when supported by the stream.
+
+```swift
+let vod = MediaSource(url: vodURL, presentationKind: .onDemand)
+let live = MediaSource(url: liveHLSURL, presentationKind: .live)
+
+StreamPlayerView(source: vod) // or StreamPlayerView(source: live)
+```
+
+`PlayerConfiguration.autoplay` defaults to `false`, so AVKit's controls let the viewer start playback. Set it to `true` to start when ready. For a live stream whose seekable range must continue refreshing while paused, opt in with `keepsLiveTimelineCurrentWhilePaused: true`; this may increase network and power use.
+
+### Add bearer authentication and FairPlay
+
+The managed view accepts the same request configuration. The host app supplies its token provider and its FairPlay provider; StreamKit routes media and key requests through the existing playback engine.
+
+```swift
+let mediaAuthentication = MediaBearerAuthentication(
+    trustedHosts: ["video.example.com", "cdn.example.com"]
+) { resourceURL in
+    try await accountSession.validMediaToken(for: resourceURL)
+}
+
+let source = MediaSource(
+    url: protectedHLSURL,
+    requestConfiguration: MediaRequestConfiguration(
+        bearerAuthentication: mediaAuthentication,
+        fairPlay: FairPlayConfiguration(licenseProvider: appFairPlayProvider)
+    ),
+    presentationKind: .onDemand
+)
+
+StreamPlayerView(source: source)
+```
+
+Both authentication settings are optional and independent. Add bearer authentication only when the HLS origin requires it; add FairPlay only for FairPlay-protected content. Bearer tokens authorize HLS media resources on the exact trusted HTTPS hosts. The FairPlay provider separately handles the certificate, key-ID/content-ID mapping, license-server authentication and protocol, and CKC response parsing. If the host's license server also needs credentials, provide them inside `appFairPlayProvider`.
+
+The same `MediaRequestConfiguration` can also carry explicitly scoped cookies and a user agent when your service requires them:
+
+```swift
+let requestConfiguration = MediaRequestConfiguration(
+    cookies: [MediaCookie(name: "session", value: sessionCookie,
+                          domain: "video.example.com")],
+    userAgent: "ExampleApp/1.0",
+    bearerAuthentication: mediaAuthentication,
+    fairPlay: FairPlayConfiguration(licenseProvider: appFairPlayProvider)
+)
+```
+
+Pass this as `requestConfiguration: requestConfiguration` when constructing `MediaSource`. The isolated authenticated HLS loader uses only explicitly supplied cookies; it does not import cookies from the app's shared URL session store.
+
+### Picture in Picture and session ownership
+
+AVKit supplies standard playback controls and the system Picture in Picture affordance where supported. To opt into automatic PiP when the app leaves the foreground, set `automaticallyStartsPictureInPictureWhenLeavingApp: true`. The one-argument `StreamPlayerView(source:)` owns and shuts down its session when removed, after active PiP stops. Retain a `StreamPlayerSession` above the player route when playback/PiP must survive navigation or when the host needs to provide a route restoration handler:
+
+```swift
+@MainActor
+struct PlayerOwnerView: View {
+    let source: MediaSource
+    @StateObject private var session: StreamPlayerSession
+
+    init(source: MediaSource) {
+        self.source = source
+        _session = StateObject(wrappedValue: StreamPlayerSession(
+            source: source,
+            automaticallyStartsPictureInPictureWhenLeavingApp: true
+        ))
+    }
+
+    var body: some View {
+        StreamPlayerView(session: session)
+    }
+}
+```
+
+Pass a `restorationHandler` to `StreamPlayerSession` when the host needs to restore its navigation route; call its completion with `true` only after the route is available. Use `StreamPlayerController` with `StreamVideoView` instead when you need app-owned controls. The advanced AVKit integration remains available when the host needs to own the presentation lifecycle directly.
+
+Keep `StreamPlayerSession` in an owner above the player route when playback or Picture in Picture must survive route changes. `shutdown()` waits for PiP to stop before releasing playback; if that wait is cancelled, the session stays alive.
 
 ## State Observation
 
@@ -350,7 +389,7 @@ let handle = controller.load(source)
 try await handle.waitUntilReady()
 ```
 
-The token provider is called for media requests, not just the initial playlist. List every exact host that may serve playlists, segments, keys, or redirects. Tokens are never sent to non-HTTPS or non-allowlisted hosts. Authenticated HLS playlists that reference insecure HTTP resources fail instead of downgrading transport. Regular HTTPS playback without bearer authentication keeps using AVFoundation's native loading path.
+The token provider is called for media requests, not just the initial playlist. List every exact host that may serve playlists, segments, keys, or redirects. Tokens are never sent to non-HTTPS or non-allowlisted hosts. Authenticated HLS playlists that reference insecure HTTP resources fail instead of downgrading transport. Regular HTTPS playback without bearer authentication keeps using AVFoundation's native loading path. To use this with the managed player, pass the configured `source` to `StreamPlayerView(source:)` instead of calling `controller.load(source)`; see [Add bearer authentication and FairPlay](#add-bearer-authentication-and-fairplay).
 
 Authenticated loading uses an isolated URL session. It does not read cookies from the app's shared URL session store; pass any required cookies explicitly with `MediaRequestConfiguration` so StreamKit can apply their domain and path scope.
 
@@ -371,7 +410,7 @@ let handle = controller.load(source)
 try await handle.waitUntilReady()
 ```
 
-See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for the provider contract and request lifecycle. The demo includes a dedicated Axinom FairPlay test screen for its public protected HLS vector. The manifest, public evaluation certificate, generic FairPlay license endpoint, and public evaluation token for that vector are prefilled. A user-provided live run confirmed HTTP 200 from the license endpoint, AVFoundation key acceptance, and playback reaching `.playing`. The token is included in the demo source and compiled sample solely for Axinom's public test asset; do not put production tokens in source. You can enter your own tenant values at runtime. Diagnostics omit the token and DRM payloads. This is an evaluation harness, not production credential management: use your app-approved FPS certificate and secure entitlement/token flow in production. End-to-end renewal and real entitlement-rejection behavior require provider-issued test materials. Package tests simulate provider rejection/network errors, empty CKC, cancellation, and public-error redaction; they do not simulate HTTP parsing, AVFoundation key challenges, or real renewal. Offline/persistable keys are not supported. If the HLS origin also needs bearer authorization, configure that separately; FairPlay license-server authentication remains the provider's responsibility.
+See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for the provider contract and request lifecycle. The example above passes FairPlay through the managed player; the demo's dedicated Axinom screen demonstrates the same provider contract using lower-level controller APIs so the request lifecycle and diagnostics remain visible. Its public protected HLS vector is preconfigured. A user-provided live run confirmed HTTP 200 from the license endpoint, AVFoundation key acceptance, and playback reaching `.playing`. The token is included in the demo source and compiled sample solely for Axinom's public test asset; do not put production tokens in source. You can enter your own tenant values at runtime. Diagnostics omit the token and DRM payloads. This is an evaluation harness, not production credential management: use your app-approved FPS certificate and secure entitlement/token flow in production. End-to-end renewal and real entitlement-rejection behavior require provider-issued test materials. Package tests simulate provider rejection/network errors, empty CKC, cancellation, and public-error redaction; they do not simulate HTTP parsing, AVFoundation key challenges, or real renewal. Offline/persistable keys are not supported. If the HLS origin also needs bearer authorization, configure that separately; FairPlay license-server authentication remains the provider's responsibility.
 
 ## Documentation
 
@@ -385,7 +424,7 @@ See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for t
 
 - iOS only (no macOS/tvOS/watchOS support)
 - AVFoundation-based playback only
-- No built-in UI controls (use StreamVideoView with custom controls)
+- No StreamKit-designed custom controls; use the managed AVKit view or build app-owned controls with `StreamVideoView`
 - No advertising; the public Axinom FairPlay vector is verified, while customer-provider renewal and failure scenarios remain unverified
 - StreamKit does not provide a full playback-controls UI or set a package-wide orientation policy. Pair `StreamVideoView` with `StreamPictureInPictureController` for app-owned controls, or use `StreamAVPlayerView` for AVKit's standard controls. The demo requests landscape for its custom fullscreen mode.
 - Offline playback requires application-level file handling
@@ -394,6 +433,7 @@ See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for t
 
 See the [StreamKitDemo](Examples/StreamKitDemo/) target for a complete example showing:
 - Basic playback controls
+- Managed one-session AVKit player view
 - State observation
 - Track selection UI
 - Concurrent independent players

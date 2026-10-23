@@ -19,6 +19,17 @@ struct DemoHomeView: View {
             List {
                 Section("Playback") {
                     NavigationLink {
+                        ManagedPlayerDemoView()
+                    } label: {
+                        DemoNavigationRow(
+                            title: "Managed AVKit Player",
+                            subtitle: "VOD with standard controls and PiP",
+                            symbol: "play.rectangle.fill"
+                        )
+                    }
+                    .accessibilityIdentifier("demo.managed-player")
+
+                    NavigationLink {
                         LiveDVRDemoView()
                     } label: {
                         DemoNavigationRow(
@@ -90,7 +101,7 @@ struct DemoHomeView: View {
                     } label: {
                         DemoNavigationRow(
                             title: "Bearer-Authenticated HLS",
-                            subtitle: "Play a protected stream with a host-scoped token",
+                            subtitle: "Token flow; source also works with managed player",
                             symbol: "lock.shield"
                         )
                     }
@@ -101,7 +112,7 @@ struct DemoHomeView: View {
                     } label: {
                         DemoNavigationRow(
                             title: "Axinom FairPlay Test",
-                            subtitle: "Play Axinom's protected HLS test vector",
+                            subtitle: "FairPlay flow; source also works with managed player",
                             symbol: "key.horizontal"
                         )
                     }

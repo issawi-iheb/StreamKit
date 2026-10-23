@@ -1,7 +1,9 @@
 # StreamKit Architecture
 
 ## Public API Responsibilities
+- `StreamPlayerSession` and `StreamPlayerView`: managed SwiftUI integration for a media source, snapshots, AVKit presentation, and safe PiP-aware shutdown
 - `StreamPlayerController`: Main interface for applications to control playback
+- `StreamVideoView` and `StreamAVPlayerView`: app-owned rendering and lower-level AVKit presentation surfaces
 - `MediaSource`: Represents media to be played (URL, file, etc.)
 - `PlayerConfiguration`: Immutable settings for player behavior
 
@@ -39,7 +41,9 @@
 
 ```mermaid
 flowchart LR
-    App[Host app or StreamKit demo] -->|MediaSource + configuration| Controller[StreamPlayerController]
+    App[Host app or StreamKit demo] -->|MediaSource + configuration| Session[Optional StreamPlayerSession facade]
+    Session --> Controller[StreamPlayerController]
+    App -->|Advanced custom-control path| Controller
     Controller --> Engine[AVFoundation playback engine]
     Engine --> Asset[AVURLAsset and AVPlayerItem]
     Asset --> Player[AVPlayer renders media]
@@ -61,8 +65,10 @@ flowchart LR
     Controller -->|same AVPlayer output| CustomView[StreamVideoView and app-owned controls]
     Host -->|retains for playback session| CustomPiP[StreamPictureInPictureController]
     CustomPiP -->|owns PiP transition and source layer| CustomView
-    Controller -->|same AVPlayer output| SystemView[Optional StreamAVPlayerView using AVPlayerViewController]
-    Host -->|retains for playback session| SystemPiP[StreamAVPlayerPresentationController]
+    Controller -->|same AVPlayer output| SystemView[StreamAVPlayerView using AVPlayerViewController]
+    Session -->|owns with the session| SystemPiP[StreamAVPlayerPresentationController]
+    Host -->|retains session above route for cross-route PiP| Session
+    Host -->|retains for direct AVKit integration| SystemPiP
     SystemPiP -->|delegate and restoration lifecycle| SystemView
     SystemPiP -->|restore route before completion| Host
     KeySession -. redacted key result .-> Diagnostics[Optional host diagnostics]
@@ -72,7 +78,24 @@ The diagram shows ownership and data flow, not a deployment topology. FairPlay c
 
 `StreamVideoView` renders a controller into an `AVPlayerLayer` for app-owned controls. A `StreamPictureInPictureController` coordinates PiP for those custom surfaces; share one instance across views rendering the same controller, and start PiP in response to a user action. The host must retain both controllers in an owner that outlives the player route while PiP is active. The PiP controller retains the source layer until AVKit reports stop or failed start. `try await stopAndWaitUntilStopped()` is the shutdown barrier: await it before shutting down or replacing the playback controller. If the wait is cancelled, it throws while AVKit continues the stop request; retain playback and wait again before shutdown.
 
-`StreamAVPlayerView` is an alternative AVKit-backed surface that provides Apple's standard controls and system PiP/AirPlay affordances where supported. The host retains one `StreamAVPlayerPresentationController` outside the player route for the playback session. It retains the AVKit delegate and controller across source-view removal, requests route restoration, and releases the detached controller after PiP stops. The host restoration callback reports success only after the player interface is available. Use one renderer at a time for a controller. The host owns process-wide audio-session configuration and the app's `audio` background mode. The demo's standalone custom-control fullscreen cover requests landscape while presented and restores the orientation active before entry; this is sample behavior, not a package-wide orientation policy.
+`StreamAVPlayerView` is an AVKit-backed surface that provides Apple's standard controls and system PiP/AirPlay affordances where supported. `StreamPlayerSession` is the managed facade: it creates the controller, loads the supplied source, publishes snapshots, and owns the AVKit presentation controller. `StreamPlayerView` renders that session. Its `shutdown()` waits for PiP to finish before releasing playback. Retain the session above the player route if playback or PiP must survive route removal. Supply a restoration handler when the host needs to restore its navigation route; the default reports that no restoration occurred. For custom controls, use `StreamPlayerController` and `StreamVideoView` directly. The host owns process-wide audio-session configuration and the app's `audio` background mode.
+
+### Managed-player feature coverage and ownership
+
+The managed facade changes the **presentation and session-lifecycle entry point**, not the playback engine or source capabilities. A `MediaSource` is loaded by the same controller and engine whether it is presented by `StreamPlayerView`, `StreamAVPlayerView`, or `StreamVideoView`.
+
+| Capability | Managed-player setup | Host-app responsibility |
+| --- | --- | --- |
+| VOD | Pass a source with `.onDemand` (or leave the kind `.unspecified` if live semantics are not needed). | Supply a playable URL/file. |
+| Live and DVR | Pass a source with `.live`; the timeline reports AVFoundation's seekable ranges, and live-edge seeking is available when the stream exposes a seekable window. | Identify the source as live and decide how the UI exposes DVR seeking. |
+| Cookies and user agent | Set `cookies` and/or `userAgent` on `MediaRequestConfiguration`. | Supply cookie values and the desired user agent. Authenticated loading uses only explicitly supplied cookies. |
+| Bearer-authenticated HLS | Set `MediaRequestConfiguration.bearerAuthentication` on the source. | Provide an async token provider and exact trusted HTTPS media hosts. |
+| FairPlay-protected HLS | Set `MediaRequestConfiguration.fairPlay` on the source. | Implement `FairPlayLicenseProvider` for certificate acquisition, content-ID mapping, license-server authentication/protocol, and CKC parsing. |
+| Bearer media auth plus FairPlay | Configure both fields on the same `MediaRequestConfiguration` when the origin and key service each require their respective authorization. | Keep media-token authorization separate from license-server authorization. |
+| Standard controls and PiP | Render with `StreamPlayerView`; optionally enable automatic PiP on app background. | Retain a `StreamPlayerSession` above the route and provide restoration behavior if playback/PiP must survive navigation. |
+| Custom controls | Use `StreamPlayerController` with `StreamVideoView`. | Build controls and own the view/session lifecycle. |
+
+The managed view does not supply DRM credentials or infer whether a URL is live. This is intentional: content type and provider-specific authorization are input configuration, while playback orchestration and AVKit presentation remain SDK responsibilities. Copyable setup examples for each managed option are in the README's [Quick Start](../README.md#quick-start). The demo has a basic managed AVKit route; its bearer and Axinom FairPlay screens use the lower-level controller path to expose those provider workflows and diagnostics. Their configured `MediaSource` values can be passed to `StreamPlayerView(source:)` or a retained `StreamPlayerSession` without changing the DRM/authentication pipeline.
 
 ## Platform Boundary
 - **Platform-independent**: Intent, Phase, Snapshot, Failure enums
