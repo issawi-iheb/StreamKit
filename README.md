@@ -415,6 +415,7 @@ See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for t
 ## Documentation
 
 - [Architecture Overview](Documentation/Architecture.md) - Core design principles
+- [Contributor Guide](Documentation/Contributing.md) - Source map, playback flow, ownership rules, and validation commands
 - [Playback State Machine](Documentation/PlaybackStateMachine.md) - Intent vs Phase details
 - [Multi-Player Architecture](Documentation/MultiPlayerArchitecture.md) - Instance isolation
 - [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) - Provider contract and protected HLS flow

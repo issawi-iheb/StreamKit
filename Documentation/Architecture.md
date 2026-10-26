@@ -1,5 +1,7 @@
 # StreamKit Architecture
 
+For a practical source map and change guide, see [Contributing to StreamKit](Contributing.md).
+
 ## Public API Responsibilities
 - `StreamPlayerSession` and `StreamPlayerView`: managed SwiftUI integration for a media source, snapshots, AVKit presentation, and safe PiP-aware shutdown
 - `StreamPlayerController`: Main interface for applications to control playback
