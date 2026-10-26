@@ -26,8 +26,11 @@ public struct PlaybackTimeRange: Equatable, Sendable {
 
 /// Timeline metadata reported by the active media item.
 ///
-/// Seekable ranges may be discontinuous. `currentDate` is available only when
-/// the media timeline maps playback time to wall-clock time.
+/// Seekable ranges may be discontinuous. While a live item is paused, the
+/// ranges reflect the most recently observed values and may become stale unless
+/// `PlayerConfiguration.keepsLiveTimelineCurrentWhilePaused` is enabled.
+/// `currentDate` is available only when the media timeline maps playback time
+/// to wall-clock time.
 public struct PlaybackTimeline: Equatable, Sendable {
 
     /// The presentation classification supplied when loading the source.

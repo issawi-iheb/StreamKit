@@ -13,8 +13,10 @@ public struct PlayerConfiguration: Equatable, Sendable {
     public let automaticallyResumesAfterAudioInterruption: Bool
 
     /// Keeps a live stream's seekable timeline fresh while playback is paused.
-    /// This allows AVFoundation to use network resources while paused and can
-    /// increase network and power use. Disabled by default.
+    /// When disabled, timeline values are sampled during playback updates and
+    /// may become stale while paused. Enabling this allows AVFoundation to use
+    /// network resources while paused and can increase network and power use.
+    /// Disabled by default.
     public let keepsLiveTimelineCurrentWhilePaused: Bool
 
     /// Creates a player configuration.

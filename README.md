@@ -57,7 +57,7 @@ let live = MediaSource(url: liveHLSURL, presentationKind: .live)
 StreamPlayerView(source: vod) // or StreamPlayerView(source: live)
 ```
 
-`PlayerConfiguration.autoplay` defaults to `false`, so AVKit's controls let the viewer start playback. Set it to `true` to start when ready. For a live stream whose seekable range must continue refreshing while paused, opt in with `keepsLiveTimelineCurrentWhilePaused: true`; this may increase network and power use.
+`PlayerConfiguration.autoplay` defaults to `false`, so AVKit's controls let the viewer start playback. Set it to `true` to start when ready. Live seekable ranges are sampled during playback updates; while paused, the last reported range may become stale because AVFoundation may stop updating live state. If the UI must keep the live/DVR window current while paused, opt in with `keepsLiveTimelineCurrentWhilePaused: true`. Apple notes this can use additional network and power resources, so it stays off by default ([AVPlayerItem documentation](https://developer.apple.com/documentation/avfoundation/avplayeritem/canusenetworkresourcesforlivestreamingwhilepaused)).
 
 ### Add bearer authentication and FairPlay
 
@@ -320,7 +320,7 @@ The coordinator only arbitrates among controllers that share it. The host app st
 
 Declare a source as `.live` to enable live-edge seeking and live timeline semantics. AVFoundation supplies the seekable ranges; the newest range end is a seekable-window boundary, not a guarantee of zero latency. The ranges can be discontinuous. The demo's **Live & DVR Playback** screen accepts an HTTPS HLS live manifest, displays the current ranges and media date, and provides live-edge and behind-live seeks. The user must supply a stream with an actual DVR window to exercise behind-live seeking. If the app needs the timeline to stay fresh while paused, set `PlayerConfiguration(keepsLiveTimelineCurrentWhilePaused: true)`. AVFoundation may use network resources while paused in that mode, increasing network and power use; this setting is off by default. See Apple's [`canUseNetworkResourcesForLiveStreamingWhilePaused`](https://developer.apple.com/documentation/avfoundation/avplayeritem/canusenetworkresourcesforlivestreamingwhilepaused) documentation.
 
-The demo displays AVFoundation's reported ranges. Verify live-window behavior against the target stream on a device.
+The demo displays AVFoundation's most recently reported ranges. With the default paused-timeline policy, those ranges can become stale while playback is paused; enable `keepsLiveTimelineCurrentWhilePaused` when the UI must track a moving DVR window during a pause. Verify live-window behavior against the target stream on a device.
 
 The demo uses asynchronous audio-session activation on iOS 27 and later. On earlier supported versions, it runs the legacy activation call away from the main thread. Its simulated interruption controls exercise StreamKit's response to begin/end events; real Siri, call, route, and background behavior still needs OS/device verification.
 
