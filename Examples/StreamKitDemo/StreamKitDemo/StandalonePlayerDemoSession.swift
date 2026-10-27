@@ -14,7 +14,7 @@ final class StandalonePlayerDemoSession: ObservableObject {
     )
     @Published private(set) var errorMessage: String?
 
-    private let restorationCoordinator = PresentationDemoRestorationCoordinator()
+    private let restorationCoordinator = DemoPlayerRouteRestorationCoordinator()
     private var pictureInPictureStateTask: AnyCancellable?
 
     let trackState = PlayerTrackState()

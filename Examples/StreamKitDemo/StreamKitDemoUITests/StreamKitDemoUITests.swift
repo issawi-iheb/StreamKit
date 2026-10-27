@@ -177,6 +177,67 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testManagedPlayerCanEnterAndExitFullscreen() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        tapMenuEntry("demo.managed-player", in: app)
+        XCTAssertTrue(app.navigationBars["Managed Player"].waitForExistence(timeout: 5))
+
+        let playerSurface = app.otherElements["Video"]
+        XCTAssertTrue(playerSurface.waitForExistence(timeout: 5), app.debugDescription)
+        playerSurface.tap()
+
+        let enterFullscreenButton = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[cd] 'full' OR label CONTAINS[cd] 'screen'")
+        ).firstMatch
+        XCTAssertTrue(enterFullscreenButton.waitForExistence(timeout: 10), app.debugDescription)
+        enterFullscreenButton.tap()
+
+        let fullscreenSurface = app.otherElements["Video"]
+        XCTAssertTrue(fullscreenSurface.waitForExistence(timeout: 10), app.debugDescription)
+        fullscreenSurface.tap()
+        let transportButton = app.buttons["Play/Pause"]
+        XCTAssertTrue(transportButton.waitForExistence(timeout: 10), app.debugDescription)
+        if transportButton.label == "Play" {
+            transportButton.tap()
+        }
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 20), app.debugDescription)
+
+        let fullscreenScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        fullscreenScreenshot.name = "Managed AVKit fullscreen during playback"
+        fullscreenScreenshot.lifetime = .keepAlways
+        add(fullscreenScreenshot)
+
+        fullscreenSurface.tap()
+        let exitFullscreenButton = app.buttons["Close"]
+        XCTAssertTrue(exitFullscreenButton.waitForExistence(timeout: 10), app.debugDescription)
+
+        exitFullscreenButton.tap()
+
+        XCTAssertTrue(app.navigationBars["Managed Player"].waitForExistence(timeout: 10))
+
+        app.buttons["managed.back-to-menu"].tap()
+        XCTAssertTrue(app.buttons["demo.managed-player"].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testLiveDVRDemoStartsWithPublicLiveSample() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        tapMenuEntry("demo.live-dvr", in: app)
+
+        let liveURLField = app.textFields["Live HLS manifest URL"]
+        XCTAssertTrue(liveURLField.waitForExistence(timeout: 5))
+        XCTAssertEqual(
+            liveURLField.value as? String,
+            "https://rt-fra.rttv.com/live/rtfrance/playlist.m3u8"
+        )
+        XCTAssertTrue(app.buttons["liveDVRLoadStream"].isEnabled)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

@@ -5,14 +5,14 @@ import StreamKit
 struct LiveDVRDemoView: View {
     @State private var controller = StreamPlayerController()
     @State private var snapshot = PlaybackSnapshot(phase: .idle, intent: .pause)
-    @State private var streamURL = ""
+    @State private var streamURL = "https://rt-fra.rttv.com/live/rtfrance/playlist.m3u8"
     @State private var isLoading = false
     @State private var errorMessage: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Enter an HTTPS HLS live stream with a DVR window. The controls seek to the live edge or request playback 15, 30, or 60 seconds behind it.")
+                Text("This demo starts with a public RT live HLS sample. You can replace it with your own HTTPS HLS URL. The controls seek to the live edge or request playback 15, 30, or 60 seconds behind it; each stream controls how much DVR history is available.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 

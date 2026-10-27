@@ -3,24 +3,37 @@ import StreamKit
 
 @MainActor
 struct ManagedPlayerDemoView: View {
-    @StateObject private var session: StreamPlayerSession
-
-    init() {
-        let source = MediaSource(
-            url: URL(string: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")!,
-            presentationKind: .onDemand
-        )
-        _session = StateObject(
-            wrappedValue: StreamPlayerSession(source: source)
-        )
-    }
+    @ObservedObject var sessionOwner: ManagedPlayerDemoSession
 
     var body: some View {
-        StreamPlayerView(session: session)
-            .navigationTitle("Managed Player")
-            .navigationBarTitleDisplayMode(.inline)
-            .onDisappear {
-                Task { try? await session.shutdown() }
+        Group {
+            if let session = sessionOwner.playerSession {
+                StreamPlayerView(session: session)
+            } else {
+                ProgressView()
             }
+        }
+        .navigationTitle("Managed Player")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    sessionOwner.isPlayerPresented = false
+                } label: {
+                    Label("StreamKit", systemImage: "chevron.left")
+                }
+                .accessibilityIdentifier("managed.back-to-menu")
+            }
+        }
+        .onAppear {
+            sessionOwner.playerInterfaceDidAppear()
+        }
+        .onDisappear {
+            if !sessionOwner.isPlayerPresented {
+                sessionOwner.playerInterfaceDidDisappear()
+                sessionOwner.playerRouteDidClose()
+            }
+        }
     }
 }

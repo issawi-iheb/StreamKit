@@ -11,6 +11,7 @@ import StreamKit
 struct DemoHomeView: View {
     @StateObject private var presentationSession = PresentationDemoSession()
     @StateObject private var standalonePlayerSession = StandalonePlayerDemoSession()
+    @StateObject private var managedPlayerSession = ManagedPlayerDemoSession()
 
     @State private var isStandalonePlayerPresented = false
 
@@ -18,15 +19,17 @@ struct DemoHomeView: View {
         NavigationStack {
             List {
                 Section("Playback") {
-                    NavigationLink {
-                        ManagedPlayerDemoView()
+                    Button {
+                        managedPlayerSession.startPlayerRoute()
                     } label: {
                         DemoNavigationRow(
                             title: "Managed AVKit Player",
-                            subtitle: "VOD with standard controls and PiP",
+                            subtitle: "VOD with standard controls and Picture in Picture",
                             symbol: "play.rectangle.fill"
                         )
                     }
+                    .buttonStyle(.plain)
+                    .disabled(managedPlayerSession.isPreparingPlayer)
                     .accessibilityIdentifier("demo.managed-player")
 
                     NavigationLink {
@@ -133,11 +136,27 @@ struct DemoHomeView: View {
             ) {
                 PresentationDemoView(session: presentationSession)
             }
+            .navigationDestination(
+                isPresented: $managedPlayerSession.isPlayerPresented
+            ) {
+                ManagedPlayerDemoView(sessionOwner: managedPlayerSession)
+            }
         }
         .onAppear {
             standalonePlayerSession.requestPlayerRoute = {
                 isStandalonePlayerPresented = true
             }
+        }
+        .alert(
+            "Could not prepare playback",
+            isPresented: Binding(
+                get: { managedPlayerSession.errorMessage != nil },
+                set: { if !$0 { managedPlayerSession.clearError() } }
+            )
+        ) {
+            Button("OK") { managedPlayerSession.clearError() }
+        } message: {
+            Text(managedPlayerSession.errorMessage ?? "")
         }
     }
 }

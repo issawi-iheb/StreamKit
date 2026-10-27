@@ -54,7 +54,7 @@ struct StreamKitDemoTests {
     @MainActor
     @Test("PiP restoration completes only after the player route appears")
     func restorationWaitsForPlayerRoute() {
-        let coordinator = PresentationDemoRestorationCoordinator()
+        let coordinator = DemoPlayerRouteRestorationCoordinator()
         let completion = RestorationCompletionRecorder()
         var routeRequestCount = 0
         coordinator.requestPlayerRoute = { routeRequestCount += 1 }
@@ -76,7 +76,7 @@ struct StreamKitDemoTests {
     @MainActor
     @Test("PiP restoration reports failure if the host cannot present the player route")
     func restorationReportsUnavailableRoute() {
-        let coordinator = PresentationDemoRestorationCoordinator()
+        let coordinator = DemoPlayerRouteRestorationCoordinator()
         let completion = RestorationCompletionRecorder()
 
         coordinator.restorePlayerInterface { completion.record($0) }

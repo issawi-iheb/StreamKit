@@ -100,29 +100,89 @@ Pass this as `requestConfiguration: requestConfiguration` when constructing `Med
 
 ### Picture in Picture and session ownership
 
-AVKit supplies standard playback controls and the system Picture in Picture affordance where supported. To opt into automatic PiP when the app leaves the foreground, set `automaticallyStartsPictureInPictureWhenLeavingApp: true`. The one-argument `StreamPlayerView(source:)` owns and shuts down its session when removed, after active PiP stops. Retain a `StreamPlayerSession` above the player route when playback/PiP must survive navigation or when the host needs to provide a route restoration handler:
+AVKit supplies standard playback controls and the system Picture in Picture affordance where supported. For a player that lives only on its current screen, use `StreamPlayerView(source:)`; it owns and shuts down its session when removed, after active PiP stops. To keep playback alive across navigation and restore the player route when PiP closes, retain a `StreamPlayerSession` in a parent that outlives that route and provide a restoration handler:
 
 ```swift
-@MainActor
-struct PlayerOwnerView: View {
-    let source: MediaSource
-    @StateObject private var session: StreamPlayerSession
+import SwiftUI
+import StreamKit
 
-    init(source: MediaSource) {
-        self.source = source
-        _session = StateObject(wrappedValue: StreamPlayerSession(
-            source: source,
-            automaticallyStartsPictureInPictureWhenLeavingApp: true
-        ))
-    }
+@MainActor
+struct PlayerHost: View {
+    let source: MediaSource
+    @State private var session: StreamPlayerSession?
+    @State private var isPlayerPresented = false
+    @State private var restorationCompletion: (@Sendable (Bool) -> Void)?
 
     var body: some View {
-        StreamPlayerView(session: session)
+        NavigationStack {
+            Button("Play video", action: openPlayer)
+                .navigationDestination(isPresented: $isPlayerPresented) {
+                    if let session {
+                        StreamPlayerView(session: session)
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button("Close") { isPlayerPresented = false }
+                                }
+                            }
+                            .onAppear {
+                                restorationCompletion?(true)
+                                restorationCompletion = nil
+                            }
+                            .onDisappear {
+                                releaseSessionWhenRouteCloses(session)
+                            }
+                    }
+                }
+        }
+    }
+
+    private func openPlayer() {
+        if session != nil {
+            isPlayerPresented = true
+            return
+        }
+
+        session = StreamPlayerSession(
+            source: source,
+            automaticallyStartsPictureInPictureWhenLeavingApp: true,
+            restorationHandler: { completion in
+                guard !isPlayerPresented else {
+                    completion(true)
+                    return
+                }
+                restorationCompletion = completion
+                isPlayerPresented = true
+            }
+        )
+        isPlayerPresented = true
+    }
+
+    private func releaseSessionWhenRouteCloses(_ session: StreamPlayerSession) {
+        guard !isPlayerPresented else { return }
+
+        Task { @MainActor in
+            try? await session.waitUntilPictureInPictureStops()
+            guard !isPlayerPresented, self.session === session else { return }
+            self.session = nil
+            try? await session.shutdown()
+        }
     }
 }
 ```
 
-Pass a `restorationHandler` to `StreamPlayerSession` when the host needs to restore its navigation route; call its completion with `true` only after the route is available. Use `StreamPlayerController` with `StreamVideoView` instead when you need app-owned controls. The advanced AVKit integration remains available when the host needs to own the presentation lifecycle directly.
+The sample keeps the session in `PlayerHost`, outside the navigation destination. When PiP asks to restore the interface, the handler presents the route and the destination calls the completion after it appears. If the user closes the route while PiP is active, the host retains the session until PiP stops; if PiP is idle, it shuts playback down. AVKit requires the host to report successful restoration only after its interface is available ([standard-player restoration](https://developer.apple.com/documentation/avkit/adopting-picture-in-picture-in-a-standard-player)).
+
+Configure and activate the host app's audio session before starting playback, and enable **Audio, AirPlay, and Picture in Picture** under the target's Background Modes capability:
+
+```swift
+import AVFAudio
+
+let audioSession = AVAudioSession.sharedInstance()
+try audioSession.setCategory(.playback, mode: .moviePlayback)
+try audioSession.setActive(true)
+```
+
+Handle configuration errors in your app. Apple documents the playback audio category and background capability in [Configuring your app for media playback](https://developer.apple.com/documentation/avfoundation/configuring-your-app-for-media-playback). Automatic PiP is opt-in and applies when the inline player is the primary content; users can also disable automatic PiP in system settings. For custom controls, use `StreamPlayerController` with `StreamVideoView`; for direct control of AVKit presentation, use `StreamAVPlayerView` with a retained presentation controller.
 
 Keep `StreamPlayerSession` in an owner above the player route when playback or Picture in Picture must survive route changes. `shutdown()` waits for PiP to stop before releasing playback; if that wait is cancelled, the session stays alive.
 
@@ -318,7 +378,7 @@ The coordinator only arbitrates among controllers that share it. The host app st
 
 ## Live and DVR playback
 
-Declare a source as `.live` to enable live-edge seeking and live timeline semantics. AVFoundation supplies the seekable ranges; the newest range end is a seekable-window boundary, not a guarantee of zero latency. The ranges can be discontinuous. The demo's **Live & DVR Playback** screen accepts an HTTPS HLS live manifest, displays the current ranges and media date, and provides live-edge and behind-live seeks. The user must supply a stream with an actual DVR window to exercise behind-live seeking. If the app needs the timeline to stay fresh while paused, set `PlayerConfiguration(keepsLiveTimelineCurrentWhilePaused: true)`. AVFoundation may use network resources while paused in that mode, increasing network and power use; this setting is off by default. See Apple's [`canUseNetworkResourcesForLiveStreamingWhilePaused`](https://developer.apple.com/documentation/avfoundation/avplayeritem/canusenetworkresourcesforlivestreamingwhilepaused) documentation.
+Declare a source as `.live` to enable live-edge seeking and live timeline semantics. AVFoundation supplies the seekable ranges; the newest range end is a seekable-window boundary, not a guarantee of zero latency. The ranges can be discontinuous. The demo's **Live & DVR Playback** screen starts with a public [RT live HLS sample](https://rt-fra.rttv.com/live/rtfrance/playlist.m3u8), displays the current ranges and media date, and provides live-edge and behind-live seeks. Its available DVR window is controlled by the stream and can change; replace the sample URL with your own HTTPS HLS manifest to validate a specific DVR duration. If the app needs the timeline to stay fresh while paused, set `PlayerConfiguration(keepsLiveTimelineCurrentWhilePaused: true)`. AVFoundation may use network resources while paused in that mode, increasing network and power use; this setting is off by default. See Apple's [`canUseNetworkResourcesForLiveStreamingWhilePaused`](https://developer.apple.com/documentation/avfoundation/avplayeritem/canusenetworkresourcesforlivestreamingwhilepaused) documentation.
 
 The demo displays AVFoundation's most recently reported ranges. With the default paused-timeline policy, those ranges can become stale while playback is paused; enable `keepsLiveTimelineCurrentWhilePaused` when the UI must track a moving DVR window during a pause. Verify live-window behavior against the target stream on a device.
 

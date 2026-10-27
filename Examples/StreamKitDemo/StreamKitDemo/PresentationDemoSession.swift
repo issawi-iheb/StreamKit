@@ -12,11 +12,11 @@ final class PresentationDemoSession: ObservableObject {
     @Published var isPlayerPresented = false
     @Published private(set) var pictureInPictureState: StreamPictureInPictureState = .idle
 
-    private let restorationCoordinator: PresentationDemoRestorationCoordinator
+    private let restorationCoordinator: DemoPlayerRouteRestorationCoordinator
     private var pictureInPictureObservation: AnyCancellable?
 
     init() {
-        let restorationCoordinator = PresentationDemoRestorationCoordinator()
+        let restorationCoordinator = DemoPlayerRouteRestorationCoordinator()
         self.restorationCoordinator = restorationCoordinator
         self.playerController = StreamPlayerController()
         self.pictureInPictureController = StreamPictureInPictureController(
@@ -66,50 +66,5 @@ final class PresentationDemoSession: ObservableObject {
 
     func playerInterfaceRestorationFailed() {
         restorationCoordinator.playerInterfaceRestorationFailed()
-    }
-}
-
-/// Delays AVKit's success response until SwiftUI has shown the player route.
-@MainActor
-final class PresentationDemoRestorationCoordinator {
-    var requestPlayerRoute: (@MainActor () -> Void)?
-
-    private(set) var isPlayerInterfaceAvailable = false
-    private var pendingCompletions: [@Sendable (Bool) -> Void] = []
-
-    func restorePlayerInterface(_ completion: @escaping @Sendable (Bool) -> Void) {
-        guard !isPlayerInterfaceAvailable else {
-            completion(true)
-            return
-        }
-
-        let shouldRequestRoute = pendingCompletions.isEmpty
-        pendingCompletions.append(completion)
-        guard let requestPlayerRoute else {
-            let completions = pendingCompletions
-            pendingCompletions.removeAll()
-            completions.forEach { $0(false) }
-            return
-        }
-        if shouldRequestRoute {
-            requestPlayerRoute()
-        }
-    }
-
-    func playerInterfaceDidAppear() {
-        isPlayerInterfaceAvailable = true
-        let completions = pendingCompletions
-        pendingCompletions.removeAll()
-        completions.forEach { $0(true) }
-    }
-
-    func playerInterfaceDidDisappear() {
-        isPlayerInterfaceAvailable = false
-    }
-
-    func playerInterfaceRestorationFailed() {
-        let completions = pendingCompletions
-        pendingCompletions.removeAll()
-        completions.forEach { $0(false) }
     }
 }
