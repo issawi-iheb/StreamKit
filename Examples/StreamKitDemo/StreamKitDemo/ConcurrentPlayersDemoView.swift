@@ -10,6 +10,9 @@ import StreamKit
 
 @MainActor
 struct ConcurrentPlayersDemoView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     @State private var firstController = StreamPlayerController()
     @State private var secondController = StreamPlayerController()
 
@@ -17,7 +20,8 @@ struct ConcurrentPlayersDemoView: View {
     @State private var secondTrackState = PlayerTrackState()
     @State private var isFirstPlayerFullscreen = false
     @State private var isSecondPlayerFullscreen = false
-    @State private var controlsVisible = true
+    @State private var firstControlsVisible = true
+    @State private var secondControlsVisible = true
     @State private var firstSnapshot = PlaybackSnapshot(
         phase: .idle,
         intent: .pause
@@ -39,39 +43,45 @@ struct ConcurrentPlayersDemoView: View {
         string: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
     )!
 
+    private var playerColumns: [GridItem] {
+        let count = horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize ? 2 : 1
+        return Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: count)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Concurrent Players")
-                        .font(.title2.bold())
+                DemoScreenHeading(
+                    eyebrow: "MULTI-INSTANCE",
+                    title: "Concurrent players",
+                    subtitle: "Two independent player controllers running side by side."
+                )
 
-                    Text(
-                        "Two independent player controllers running in the same screen."
+                LazyVGrid(columns: playerColumns, alignment: .leading, spacing: 16) {
+                    playerSection(
+                        title: "Player 1",
+                        controller: firstController,
+                        snapshot: firstSnapshot,
+                        trackState: firstTrackState,
+                        errorMessage: firstError,
+                        controlsVisible: $firstControlsVisible,
+                        isFullscreen: $isFirstPlayerFullscreen
                     )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+
+                    playerSection(
+                        title: "Player 2",
+                        controller: secondController,
+                        snapshot: secondSnapshot,
+                        trackState: secondTrackState,
+                        errorMessage: secondError,
+                        controlsVisible: $secondControlsVisible,
+                        isFullscreen: $isSecondPlayerFullscreen
+                    )
                 }
-
-                playerSection(
-                    title: "Player 1",
-                    controller: firstController,
-                    snapshot: firstSnapshot,
-                    trackState: firstTrackState,
-                    errorMessage: firstError,
-                    isFullscreen: $isFirstPlayerFullscreen
-                )
-
-                playerSection(
-                    title: "Player 2",
-                    controller: secondController,
-                    snapshot: secondSnapshot,
-                    trackState: secondTrackState,
-                    errorMessage: secondError,
-                    isFullscreen: $isSecondPlayerFullscreen
-                )
             }
-            .padding()
+            .demoReadableContent(maximumWidth: 1200)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
         }
         .navigationTitle("Concurrent Players")
         .navigationBarTitleDisplayMode(.inline)
@@ -116,7 +126,7 @@ struct ConcurrentPlayersDemoView: View {
                 onFullscreen: {
                     isFirstPlayerFullscreen = false
                 },
-                controlsVisible: $controlsVisible,
+                controlsVisible: $firstControlsVisible,
                 isActiveSurface: !isFirstPlayerFullscreen
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -132,7 +142,7 @@ struct ConcurrentPlayersDemoView: View {
                 onFullscreen: {
                     isSecondPlayerFullscreen = false
                 },
-                controlsVisible: $controlsVisible,
+                controlsVisible: $secondControlsVisible,
                 isActiveSurface: !isSecondPlayerFullscreen
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,11 +157,26 @@ struct ConcurrentPlayersDemoView: View {
         snapshot: PlaybackSnapshot,
         trackState: PlayerTrackState,
         errorMessage: String?,
+        controlsVisible: Binding<Bool>,
         isFullscreen: Binding<Bool>
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
+            HStack {
+                Text(title)
+                    .font(.headline)
+                Spacer()
+                Text(String(describing: snapshot.phase).capitalized)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(snapshot.phase == .playing ? Color.green : Color.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        snapshot.phase == .playing
+                            ? Color.green.opacity(0.12)
+                            : Color(uiColor: .tertiarySystemFill),
+                        in: Capsule()
+                    )
+            }
 
             DemoPlayerView(
                 controller: controller,
@@ -161,10 +186,10 @@ struct ConcurrentPlayersDemoView: View {
                 onFullscreen: {
                     isFullscreen.wrappedValue = true
                 },
-                controlsVisible: $controlsVisible,
+                controlsVisible: controlsVisible,
                 isActiveSurface: !isFullscreen.wrappedValue
             )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             if let errorMessage {
                 Text(errorMessage)
@@ -172,6 +197,7 @@ struct ConcurrentPlayersDemoView: View {
                     .foregroundStyle(.red)
             }
         }
+        .demoCardSurface()
     }
 
     private func loadFirstPlayer() async {

@@ -173,7 +173,7 @@ final class StreamKitDemoUITests: XCTestCase {
         XCTAssertTrue(exitFullscreen.waitForExistence(timeout: 5))
         exitFullscreen.tap()
 
-        XCTAssertTrue(app.staticTexts["StreamKit Demo"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Custom player"].waitForExistence(timeout: 5))
     }
 
     @MainActor

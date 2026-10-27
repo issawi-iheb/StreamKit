@@ -50,32 +50,29 @@ struct PresentationDemoView: View {
                             .accessibilityIdentifier("presentation-custom-player")
                         }
                     }
-                    .frame(height: 230)
-                    .background(.black)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
 
-                    Button {
-                        isFullscreenPresented = true
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .padding(12)
-                            .background(.black.opacity(0.65), in: Circle())
+                    if !usesSystemPlayer {
+                        Button {
+                            isFullscreenPresented = true
+                        } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(.black.opacity(0.65), in: Circle())
+                        }
+                        .padding(12)
+                        .accessibilityLabel("Enter fullscreen")
                     }
-                    .padding(12)
-                    .accessibilityLabel("Enter fullscreen")
                 }
+                .demoPlayerSurface()
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Picture in Picture")
-                        .font(.title2.bold())
-                        .accessibilityIdentifier("presentation-player-interface-ready")
-
-                    Text("Compare Apple’s AVKit controls with StreamKit’s custom player.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                DemoScreenHeading(
+                    eyebrow: "PRESENTATION",
+                    title: "Picture in Picture",
+                    subtitle: "Compare Apple’s AVKit controls with StreamKit’s custom player."
+                )
+                .accessibilityIdentifier("presentation-player-interface-ready")
 
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Player style", systemImage: "rectangle.on.rectangle")
@@ -88,7 +85,7 @@ struct PresentationDemoView: View {
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("presentation-renderer-picker")
                 }
-                .demoCard()
+                .demoCardSurface()
 
                 VStack(alignment: .leading, spacing: 14) {
                     Label("Playback", systemImage: "play.circle")
@@ -130,7 +127,7 @@ struct PresentationDemoView: View {
                         .accessibilityIdentifier("presentation-start-pip")
                     }
                 }
-                .demoCard()
+                .demoCardSurface()
 
                 VStack(alignment: .leading, spacing: 12) {
                     Label("PiP behavior", systemImage: "pip")
@@ -160,7 +157,7 @@ struct PresentationDemoView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .demoCard()
+                .demoCardSurface()
 
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Session status", systemImage: "waveform.path")
@@ -172,7 +169,7 @@ struct PresentationDemoView: View {
                     LabeledContent("Picture in Picture", value: activePictureInPictureState == .idle ? "Inactive" : "Active")
                         .accessibilityIdentifier("presentation-pip-state")
                 }
-                .demoCard()
+                .demoCardSurface()
 
                 if let errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -184,7 +181,9 @@ struct PresentationDemoView: View {
                         .accessibilityIdentifier("presentation-error")
                 }
             }
-            .padding(20)
+            .demoReadableContent(maximumWidth: 1080)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
         }
         .background(Color(uiColor: .systemBackground))
         .navigationTitle("StreamKit & PiP")
@@ -245,17 +244,6 @@ struct PresentationDemoView: View {
             guard !Task.isCancelled else { return }
             errorMessage = error.localizedDescription
         }
-    }
-}
-
-private extension View {
-    func demoCard() -> some View {
-        padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                Color(uiColor: .secondarySystemBackground),
-                in: RoundedRectangle(cornerRadius: 18)
-            )
     }
 }
 

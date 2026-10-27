@@ -63,11 +63,10 @@ struct DemoPlayerView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 playerContent
-                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .demoPlayerSurface()
             }
         }
         .background(.black)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             if isFullscreen {
                 // Show controls whenever this player presentation appears.
@@ -543,7 +542,7 @@ struct DemoPlayerView: View {
                     } label: {
                         Image(systemName: "pip.enter")
                             .font(.system(size: 15, weight: .medium))
-                            .frame(width: 36, height: 36)
+                            .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -558,7 +557,7 @@ struct DemoPlayerView: View {
                             systemName: "arrow.up.left.and.arrow.down.right"
                         )
                         .font(.system(size: 14, weight: .medium))
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

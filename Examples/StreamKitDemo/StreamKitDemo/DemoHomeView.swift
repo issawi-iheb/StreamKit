@@ -1,135 +1,145 @@
-//
-//  DemoHomeView.swift
-//  StreamKitDemo
-//
-//  Created by Iheb on 14/10/2026.
-//
-
 import SwiftUI
 import StreamKit
 
 struct DemoHomeView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     @StateObject private var presentationSession = PresentationDemoSession()
     @StateObject private var standalonePlayerSession = StandalonePlayerDemoSession()
     @StateObject private var managedPlayerSession = ManagedPlayerDemoSession()
 
     @State private var isStandalonePlayerPresented = false
 
+    private var sectionColumns: [GridItem] {
+        let count = horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize ? 2 : 1
+        return Array(
+            repeating: GridItem(.flexible(), spacing: 12, alignment: .top),
+            count: count
+        )
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section("Playback") {
-                    Button {
-                        managedPlayerSession.startPlayerRoute()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Managed AVKit Player",
-                            subtitle: "VOD with standard controls and Picture in Picture",
-                            symbol: "play.rectangle.fill"
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(managedPlayerSession.isPreparingPlayer)
-                    .accessibilityIdentifier("demo.managed-player")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 30) {
+                    intro
+                    featuredPlayer
 
-                    NavigationLink {
-                        LiveDVRDemoView()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Live & DVR Playback",
-                            subtitle: "Inspect seekable ranges and seek behind live",
-                            symbol: "dot.radiowaves.left.and.right"
-                        )
-                    }
-                    .accessibilityIdentifier("demo.live-dvr")
-
-                    NavigationLink {
-                        AudioSessionDemoView()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Audio Session & Background Playback",
-                            subtitle: "Interruption recovery and background audio",
-                            symbol: "waveform"
-                        )
-                    }
-                    .accessibilityIdentifier("demo.audio-session")
-
-                    Button {
-                        isStandalonePlayerPresented = true
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Standalone Player",
-                            subtitle: "Playback controls, seeking and fullscreen",
-                            symbol: "play.rectangle"
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("demo.standalone-player")
-
-                    NavigationLink {
-                        ConcurrentPlayersDemoView()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Concurrent Players",
-                            subtitle: "Independent playback across multiple players",
-                            symbol: "rectangle.split.2x1"
-                        )
-                    }
-                }
-
-                Section("Presentation") {
-                    Button {
-                        presentationSession.isPlayerPresented = true
-                    } label: {
-                        DemoNavigationRow(
-                            title: "AVKit Player & Picture in Picture",
-                            subtitle: "Switch between system AVKit and custom PiP",
-                            symbol: "pip"
-                        )
-                    }
-                    .accessibilityIdentifier("demo.presentation-avkit-pip")
-
-                    if presentationSession.pictureInPictureState != .idle {
-                        Button("Stop active PiP") {
-                            presentationSession.pictureInPictureController
-                                .stopPictureInPicture()
+                    demoSection("Playback examples") {
+                        NavigationLink {
+                            LiveDVRDemoView()
+                        } label: {
+                            DemoNavigationCard(
+                                title: "Live & DVR",
+                                subtitle: "Play a live stream and explore its seekable window.",
+                                symbol: "dot.radiowaves.left.and.right"
+                            )
                         }
-                        .accessibilityIdentifier("demo.stop-active-pip")
+                        .accessibilityIdentifier("demo.live-dvr")
+
+                        Button {
+                            isStandalonePlayerPresented = true
+                        } label: {
+                            DemoNavigationCard(
+                                title: "Custom controls",
+                                subtitle: "Build playback, seeking, tracks, and fullscreen into your UI.",
+                                symbol: "slider.horizontal.3"
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("demo.standalone-player")
+
+                        NavigationLink {
+                            ConcurrentPlayersDemoView()
+                        } label: {
+                            DemoNavigationCard(
+                                title: "Multiple players",
+                                subtitle: "Run two independent playback sessions together.",
+                                symbol: "rectangle.split.2x1"
+                            )
+                        }
+                        .accessibilityIdentifier("demo.concurrent-players")
+
+                        NavigationLink {
+                            AudioSessionDemoView()
+                        } label: {
+                            DemoNavigationCard(
+                                title: "Audio & background",
+                                subtitle: "See interruption recovery and background playback.",
+                                symbol: "waveform"
+                            )
+                        }
+                        .accessibilityIdentifier("demo.audio-session")
                     }
+
+                    demoSection("Presentation") {
+                        Button {
+                            presentationSession.isPlayerPresented = true
+                        } label: {
+                            DemoNavigationCard(
+                                title: "AVKit & Picture in Picture",
+                                subtitle: "Compare Apple's player controls with StreamKit's custom surface.",
+                                symbol: "pip"
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("demo.presentation-avkit-pip")
+                        .gridCellColumns(horizontalSizeClass == .regular ? 2 : 1)
+
+                        if presentationSession.pictureInPictureState != .idle {
+                            Button {
+                                presentationSession.pictureInPictureController
+                                    .stopPictureInPicture()
+                            } label: {
+                                DemoNavigationCard(
+                                    title: "Stop active Picture in Picture",
+                                    subtitle: "Return to the presentation example.",
+                                    symbol: "pip.exit"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("demo.stop-active-pip")
+                            .gridCellColumns(horizontalSizeClass == .regular ? 2 : 1)
+                        }
+                    }
+
+                    demoSection("Protected streams") {
+                        NavigationLink {
+                            BearerAuthenticatedPlayerDemoView()
+                        } label: {
+                            DemoNavigationCard(
+                                title: "Bearer authentication",
+                                subtitle: "Provide credentials for protected HLS resources.",
+                                symbol: "lock.shield"
+                            )
+                        }
+                        .accessibilityIdentifier("demo.bearer-authenticated-hls")
+
+                        NavigationLink {
+                            FairPlayIntegrationDemoView()
+                        } label: {
+                            DemoNavigationCard(
+                                title: "FairPlay Streaming",
+                                subtitle: "Connect HLS playback to a FairPlay license provider.",
+                                symbol: "key.horizontal"
+                            )
+                        }
+                        .accessibilityIdentifier("demo.axinom-fairplay")
+                    }
+
                 }
-
-                Section("Protected Playback") {
-                    NavigationLink {
-                        BearerAuthenticatedPlayerDemoView()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Bearer-Authenticated HLS",
-                            subtitle: "Token flow; source also works with managed player",
-                            symbol: "lock.shield"
-                        )
-                    }
-                    .accessibilityIdentifier("demo.bearer-authenticated-hls")
-
-                    NavigationLink {
-                        FairPlayIntegrationDemoView()
-                    } label: {
-                        DemoNavigationRow(
-                            title: "Axinom FairPlay Test",
-                            subtitle: "FairPlay flow; source also works with managed player",
-                            symbol: "key.horizontal"
-                        )
-                    }
-                    .accessibilityIdentifier("demo.axinom-fairplay")
-                }
-
+                .demoReadableContent(maximumWidth: 1000)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 24)
             }
             .navigationTitle("StreamKit")
+            .navigationBarTitleDisplayMode(.inline)
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationDestination(
                 isPresented: $isStandalonePlayerPresented
             ) {
-                StandalonePlayerDemoView(
-                    session: standalonePlayerSession
-                )
+                StandalonePlayerDemoView(session: standalonePlayerSession)
             }
             .navigationDestination(
                 isPresented: $presentationSession.isPlayerPresented
@@ -159,29 +169,194 @@ struct DemoHomeView: View {
             Text(managedPlayerSession.errorMessage ?? "")
         }
     }
+
+    private var intro: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("PLAYER STUDIO")
+                .font(.caption.weight(.bold))
+                .tracking(1.8)
+                .foregroundStyle(.tint)
+
+            Text("Streaming,\nwithout the setup.")
+                .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Start with a ready-made player, or explore the building blocks behind it.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var featuredPlayer: some View {
+        Button {
+            managedPlayerSession.startPlayerRoute()
+        } label: {
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.035, green: 0.09, blue: 0.15),
+                                Color(red: 0.055, green: 0.22, blue: 0.31),
+                                Color(red: 0.09, green: 0.13, blue: 0.24)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                GeometryReader { geometry in
+                    ZStack {
+                        Circle()
+                            .fill(Color.cyan.opacity(0.32))
+                            .frame(width: 210, height: 210)
+                            .blur(radius: 62)
+                            .offset(x: geometry.size.width * 0.58, y: -45)
+
+                        Circle()
+                            .stroke(.white.opacity(0.10), lineWidth: 1)
+                            .frame(width: 210, height: 210)
+                            .overlay {
+                                Circle()
+                                    .stroke(.white.opacity(0.06), lineWidth: 1)
+                                    .padding(18)
+                            }
+                            .overlay {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 30, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.86))
+                                    .frame(width: 72, height: 72)
+                                    .background(.white.opacity(0.12), in: Circle())
+                                    .overlay {
+                                        Circle().stroke(.white.opacity(0.18), lineWidth: 1)
+                                    }
+                                    .shadow(color: .cyan.opacity(0.25), radius: 24)
+                            }
+                            .offset(x: geometry.size.width * 0.58, y: -38)
+                    }
+                }
+                .allowsHitTesting(false)
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.38)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color.cyan)
+                            .frame(width: 7, height: 7)
+                        Text("THE FASTEST WAY IN")
+                            .font(.caption2.weight(.bold))
+                            .tracking(1.4)
+                            .foregroundStyle(.white.opacity(0.8))
+
+                        Spacer()
+
+                        Image(systemName: "sparkles")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .accessibilityHidden(true)
+                    }
+
+                    Spacer(minLength: 32)
+
+                    Text(managedPlayerSession.isPreparingPlayer ? "Preparing player…" : "Managed player")
+                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .foregroundStyle(.white)
+
+                    Text("Starts a VOD stream immediately with AVKit controls and Picture in Picture.")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.76))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 6)
+                }
+                .padding(22)
+            }
+            .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 360 : 264)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+            }
+            .shadow(color: Color(red: 0.02, green: 0.12, blue: 0.2).opacity(0.2), radius: 22, x: 0, y: 12)
+        }
+        .buttonStyle(.plain)
+        .disabled(managedPlayerSession.isPreparingPlayer)
+        .accessibilityHint("Opens the managed AVKit player demonstration")
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("demo.managed-player")
+    }
+
+    private func demoSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+
+                Rectangle()
+                    .fill(.quaternary)
+                    .frame(height: 1)
+                    .accessibilityHidden(true)
+            }
+
+            LazyVGrid(columns: sectionColumns, alignment: .leading, spacing: 10) {
+                content()
+            }
+        }
+    }
 }
 
-private struct DemoNavigationRow: View {
+private struct DemoNavigationCard: View {
     let title: String
     let subtitle: String
     let symbol: String
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
-                .font(.title2)
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.tint)
-                .frame(width: 36)
+                .frame(width: 42, height: 42)
+                .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(title)
                     .font(.headline)
+                    .foregroundStyle(.primary)
 
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 4)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, 6)
+        .padding(15)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+        .background(
+            Color(uiColor: .secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(.primary.opacity(0.045), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

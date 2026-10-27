@@ -25,6 +25,12 @@ struct AudioSessionDemoView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                DemoScreenHeading(
+                    eyebrow: "AUDIO",
+                    title: "Sessions & interruptions",
+                    subtitle: "See how playback intent and iOS interruption signals work together."
+                )
+
                 DemoPlayerView(
                     controller: controller,
                     snapshot: snapshot,
@@ -36,21 +42,21 @@ struct AudioSessionDemoView: View {
                     controlsVisible: $controlsVisible,
                     isActiveSurface: !isFullscreen
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                Text("Audio session and interruption handling")
-                    .font(.title2.bold())
-
-                Text("The demo app configures the shared audio session for playback and enables the iOS background-audio mode. StreamKit observes audio interruptions and resumes only when playback was requested before the interruption and iOS says it may resume.")
-
-                Text("Try starting playback, locking the device, or triggering an audio interruption. If you pause during the interruption, StreamKit keeps playback paused when it ends.")
-                    .foregroundStyle(.secondary)
+                DemoPanel("Resume policy", symbol: "waveform") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("The demo configures the shared audio session for playback and enables iOS background audio. StreamKit resumes only when playback was requested before the interruption and iOS permits it.")
+                        Text("Try playback, lock the device, or trigger an interruption. If you pause during it, playback stays paused when it ends.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.footnote)
+                }
 
                 LabeledContent("Playback phase", value: String(describing: snapshot.phase))
                     .accessibilityIdentifier("audio-session-playback-phase")
                 LabeledContent("Playback intent", value: String(describing: snapshot.intent))
 
-                GroupBox("Simulated interruption checks") {
+                DemoPanel("Simulated interruption checks", symbol: "waveform") {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("These controls send test notifications to StreamKit. They verify its pause/resume policy, not a real system interruption.")
                             .font(.caption)
@@ -80,7 +86,9 @@ struct AudioSessionDemoView: View {
                         .foregroundStyle(.red)
                 }
             }
-            .padding()
+            .demoReadableContent(maximumWidth: 920)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
         }
         .navigationTitle("Audio Session")
         .navigationBarTitleDisplayMode(.inline)

@@ -22,11 +22,24 @@ The package declares iOS 16 support. The demo project currently targets iOS 26.5
 
 StreamKit offers three integration levels:
 
-- **Managed player:** `StreamPlayerSession` plus `StreamPlayerView` loads a `MediaSource` and presents AVKit's standard controls and Picture in Picture.
-- **App-owned controls:** `StreamPlayerController` plus `StreamVideoView` gives your app direct control over layout and playback controls.
-- **Advanced AVKit integration:** use `StreamAVPlayerView` with a controller and presentation controller when your app needs to own presentation and restoration lifecycles directly.
+- **Managed player — easiest:** `StreamPlayerView(source:)` creates a session, loads the source, and presents AVKit's standard controls and Picture in Picture. Use `PlayerConfiguration(autoplay: true)` if playback should start when ready.
+- **Custom player — app-owned controls:** `StreamPlayerController` plus `StreamVideoView` gives your app control over layout, controls, and custom-layer Picture in Picture.
+- **Advanced AVKit integration — explicit lifecycle:** retain a `StreamPlayerSession`, or combine `StreamAVPlayerView` with a controller and presentation controller when your app needs to coordinate navigation, restoration, and PiP ownership itself.
 
-Start with the managed player for the fewest setup steps. Use `StreamVideoView` when you need app-owned controls. For the lower-level AVKit lifecycle, see [System Player, Picture in Picture, and Fullscreen](#system-player-picture-in-picture-and-fullscreen).
+Start with the managed player unless you need app-owned controls or explicit presentation lifecycle handling. VOD, live/DVR, bearer-authenticated HLS, cookies, user agent, and FairPlay are configured on `MediaSource`; choosing the managed entry point does not remove those capabilities. See [Architecture.md](Documentation/Architecture.md) for ownership boundaries.
+
+## Screenshots
+
+These are captures from the StreamKit demo running in the iPhone Duo simulator. The home screen shows the responsive player showcase; the managed-player capture shows AVKit fullscreen during playback.
+
+<table>
+  <tr>
+    <td align="center"><strong>Player showcase · iPhone Duo</strong><br><img src="Documentation/Screenshots/home-iphone-duo.png" alt="StreamKit demo home screen on iPhone Duo" width="520"></td>
+    <td align="center"><strong>Managed AVKit fullscreen · iPhone Duo</strong><br><img src="Documentation/Screenshots/managed-player-fullscreen-iphone-duo.png" alt="Managed AVKit player in fullscreen during playback on iPhone Duo" width="300"></td>
+  </tr>
+</table>
+
+The managed-player screenshot was captured by the passing `testManagedPlayerCanEnterAndExitFullscreen` UI test. The test build and capture used the iOS 27.1 iPhone Duo simulator; see [the current validation note](AUDIT_REPORTS/12_CURRENT_STATE_AND_DEMO_UX.md).
 
 ## Quick Start
 
@@ -57,7 +70,7 @@ let live = MediaSource(url: liveHLSURL, presentationKind: .live)
 StreamPlayerView(source: vod) // or StreamPlayerView(source: live)
 ```
 
-`PlayerConfiguration.autoplay` defaults to `false`, so AVKit's controls let the viewer start playback. Set it to `true` to start when ready. Live seekable ranges are sampled during playback updates; while paused, the last reported range may become stale because AVFoundation may stop updating live state. If the UI must keep the live/DVR window current while paused, opt in with `keepsLiveTimelineCurrentWhilePaused: true`. Apple notes this can use additional network and power resources, so it stays off by default ([AVPlayerItem documentation](https://developer.apple.com/documentation/avfoundation/avplayeritem/canusenetworkresourcesforlivestreamingwhilepaused)).
+`PlayerConfiguration.autoplay` defaults to `false`, so AVKit's controls wait for the viewer to start playback. To start automatically once ready, pass `configuration: PlayerConfiguration(autoplay: true)` to `StreamPlayerView(source:configuration:)` or `StreamPlayerSession`. The demo's managed-player example opts in; the package default remains off. Live seekable ranges are sampled during playback updates; while paused, the last reported range may become stale because AVFoundation may stop updating live state. If the UI must keep the live/DVR window current while paused, opt in with `keepsLiveTimelineCurrentWhilePaused: true`. Apple notes this can use additional network and power resources, so it stays off by default ([AVPlayerItem documentation](https://developer.apple.com/documentation/avfoundation/avplayeritem/canusenetworkresourcesforlivestreamingwhilepaused)).
 
 ### Add bearer authentication and FairPlay
 

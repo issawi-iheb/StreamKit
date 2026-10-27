@@ -3,11 +3,30 @@
 For a practical source map and change guide, see [Contributing to StreamKit](Contributing.md).
 
 ## Public API Responsibilities
-- `StreamPlayerSession` and `StreamPlayerView`: managed SwiftUI integration for a media source, snapshots, AVKit presentation, and safe PiP-aware shutdown
+- `StreamPlayerView(source:)`: simplest managed SwiftUI integration; creates a `StreamPlayerSession`, loads a source, and uses AVKit's standard presentation and controls
+- `StreamPlayerSession` and `StreamPlayerView(session:)`: managed lifecycle integration when the host must retain playback across route changes or coordinate PiP restoration
 - `StreamPlayerController`: Main interface for applications to control playback
 - `StreamVideoView` and `StreamAVPlayerView`: app-owned rendering and lower-level AVKit presentation surfaces
 - `MediaSource`: Represents media to be played (URL, file, etc.)
 - `PlayerConfiguration`: Immutable settings for player behavior
+
+## Choosing an Integration Path
+
+| Path | Entry point | Host owns |
+| --- | --- | --- |
+| Managed | `StreamPlayerView(source:configuration:)` | Source/provider configuration and app audio-session policy; StreamKit owns the screen-scoped session and AVKit surface |
+| App-owned controls | `StreamPlayerController` + `StreamVideoView` | Layout, controls, track UI, and controller lifetime; use `StreamPictureInPictureController` when custom PiP is needed |
+| Advanced AVKit | Retained `StreamPlayerSession` or `StreamAVPlayerView` + presentation controller | Route retention/restoration and explicit AVKit presentation lifecycle |
+
+All three paths use the same `MediaSource`, controller, and AVFoundation playback pipeline. VOD/live semantics, cookies, user agent, bearer-authenticated HLS, and FairPlay are source configuration. Provider credentials and DRM server protocol remain app-owned. `PlayerConfiguration.autoplay` defaults to `false`; the demo's managed example opts in so playback begins when the source is ready.
+
+## Concurrency and Injection Boundaries
+
+- Public controller/session operations and the AVFoundation engine are `@MainActor` isolated. SwiftUI state should be updated on the main actor.
+- `snapshots` is an `AsyncStream`; the stream itself does not actor-isolate its consumer. UI consumers must iterate it from a main-actor task or explicitly hop to the UI actor before mutating view state.
+- Engine events carry a source generation. The controller ignores events from replaced loads, and its play/pause and seek generations prevent stale async completions from overriding newer requests.
+- `PlaybackEngine` and `AudioInterruptionSource` are internal seams injected by tests. They are not public backend/plugin APIs. The public injection point for app policy is `AudioPlaybackFocusCoordinator`; the host may share it across controllers that should arbitrate playback.
+- There is one AVPlayer/engine per controller. Instances are independent unless the host explicitly shares the audio-focus coordinator or a PiP controller for the matching rendered player.
 
 ## PlaybackCore Responsibilities
 - `PlaybackIntent`: Describes what the application wants (play/pause)
@@ -97,7 +116,7 @@ The managed facade changes the **presentation and session-lifecycle entry point*
 | Standard controls and PiP | Render with `StreamPlayerView`; optionally enable automatic PiP on app background. | Retain a `StreamPlayerSession` above the route and provide restoration behavior if playback/PiP must survive navigation. |
 | Custom controls | Use `StreamPlayerController` with `StreamVideoView`. | Build controls and own the view/session lifecycle. |
 
-The managed view does not supply DRM credentials or infer whether a URL is live. This is intentional: content type and provider-specific authorization are input configuration, while playback orchestration and AVKit presentation remain SDK responsibilities. Copyable setup examples for each managed option are in the README's [Quick Start](../README.md#quick-start). The demo has a basic managed AVKit route; its bearer and Axinom FairPlay screens use the lower-level controller path to expose those provider workflows and diagnostics. Their configured `MediaSource` values can be passed to `StreamPlayerView(source:)` or a retained `StreamPlayerSession` without changing the DRM/authentication pipeline.
+The managed view does not supply DRM credentials or infer whether a URL is live. This is intentional: content type and provider-specific authorization are input configuration, while playback orchestration and AVKit presentation remain SDK responsibilities. Copyable setup examples for each managed option are in the README's [Quick Start](../README.md#quick-start). The demo's managed route uses autoplay for a ready-to-watch VOD example; its bearer and Axinom FairPlay screens use the lower-level controller path to expose those provider workflows and diagnostics. Their configured `MediaSource` values can be passed to `StreamPlayerView(source:)` or a retained `StreamPlayerSession` without changing the DRM/authentication pipeline. Demo screenshots and the latest build/UI verification are recorded in [the current review](../AUDIT_REPORTS/12_CURRENT_STATE_AND_DEMO_UX.md).
 
 ## Platform Boundary
 - **Platform-independent**: Intent, Phase, Snapshot, Failure enums

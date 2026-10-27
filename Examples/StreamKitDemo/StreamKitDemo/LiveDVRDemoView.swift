@@ -12,13 +12,18 @@ struct LiveDVRDemoView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("This demo starts with a public RT live HLS sample. You can replace it with your own HTTPS HLS URL. The controls seek to the live edge or request playback 15, 30, or 60 seconds behind it; each stream controls how much DVR history is available.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
                 StreamVideoView(controller: controller)
-                    .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .demoPlayerSurface()
+
+                DemoScreenHeading(
+                    eyebrow: "LIVE PLAYBACK",
+                    title: "Live & DVR",
+                    subtitle: "Seek to the live edge or explore the stream’s available DVR window."
+                )
+
+                Text("Starts with the public RT live stream. You can replace its HTTPS manifest URL below; available DVR history is controlled by the stream.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
                 TextField("https://example.com/live/playlist.m3u8", text: $streamURL)
                     .keyboardType(.URL)
@@ -56,7 +61,7 @@ struct LiveDVRDemoView: View {
                 }
                 .buttonStyle(.bordered)
 
-                GroupBox("Live DVR seeking") {
+                DemoPanel("Live DVR seeking", symbol: "gobackward") {
                     VStack(alignment: .leading, spacing: 10) {
                         Button("Go to live edge") {
                             seekToLiveEdge(offset: 0)
@@ -80,7 +85,7 @@ struct LiveDVRDemoView: View {
                     .disabled(!isLoaded || isLoading)
                 }
 
-                GroupBox("Observed timeline") {
+                DemoPanel("Observed timeline", symbol: "waveform.path") {
                     VStack(alignment: .leading, spacing: 6) {
                         LabeledContent("Phase", value: String(describing: snapshot.phase))
                         LabeledContent("Intent", value: String(describing: snapshot.intent))
@@ -115,7 +120,9 @@ struct LiveDVRDemoView: View {
                         .foregroundStyle(.red)
                 }
             }
-            .padding()
+            .demoReadableContent(maximumWidth: 1000)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
         }
         .navigationTitle("Live & DVR")
         .navigationBarTitleDisplayMode(.inline)

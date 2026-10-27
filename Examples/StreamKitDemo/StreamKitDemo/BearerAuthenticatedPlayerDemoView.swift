@@ -18,44 +18,54 @@ struct BearerAuthenticatedPlayerDemoView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("A public HLS sample is prefilled so you can check basic playback. To test bearer authentication, replace it with your protected HTTPS stream and enter a valid development token. List every exact host that may serve playlists, segments, keys, or redirects.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                DemoScreenHeading(
+                    eyebrow: "SECURE PLAYBACK",
+                    title: "Bearer authentication",
+                    subtitle: "Attach scoped credentials to protected HLS requests."
+                )
 
-                TextField("https://media.example.com/master.m3u8", text: $mediaURL)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("HTTPS media URL")
+                DemoPanel("Protected stream setup", symbol: "lock.shield") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("A public HLS sample is prefilled for basic playback. To test authentication, enter your protected HTTPS stream, token, and every exact host that may serve its playlists, segments, keys, or redirects.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
 
-                TextField("media.example.com, cdn.example.com", text: $trustedHosts)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Trusted media hosts")
+                        TextField("https://media.example.com/master.m3u8", text: $mediaURL)
+                            .textInputAutocapitalization(.never)
+                            .keyboardType(.URL)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("HTTPS media URL")
 
-                SecureField("Bearer token", text: $bearerToken)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Bearer token")
+                        TextField("media.example.com, cdn.example.com", text: $trustedHosts)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Trusted media hosts")
 
-                Button {
-                    loadProtectedStream()
-                } label: {
-                    if isLoading {
-                        ProgressView().frame(maxWidth: .infinity)
-                    } else {
-                        Label("Load HLS stream", systemImage: "play.fill")
-                            .frame(maxWidth: .infinity)
+                        SecureField("Bearer token", text: $bearerToken)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Bearer token")
+
+                        Button {
+                            loadProtectedStream()
+                        } label: {
+                            if isLoading {
+                                ProgressView().frame(maxWidth: .infinity)
+                            } else {
+                                Label("Load HLS stream", systemImage: "play.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isLoading || !canLoad)
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .accessibilityIdentifier("bearer-auth-error")
+                        }
                     }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading || !canLoad)
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .accessibilityIdentifier("bearer-auth-error")
                 }
 
                 DemoPlayerView(
@@ -67,13 +77,16 @@ struct BearerAuthenticatedPlayerDemoView: View {
                     controlsVisible: $controlsVisible,
                     isActiveSurface: !isFullscreen
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                Text("The token is kept only in this screen’s memory. In a product, use the provider to fetch or refresh tokens from your app’s credential store. Exact host matching prevents sending the token to unrelated HLS hosts.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                DemoPanel("Credential handling", symbol: "hand.raised") {
+                    Text("The token stays only in this screen’s memory. In an app, use the provider to fetch or refresh credentials from your credential store. Exact host matching prevents sending the token to unrelated HLS hosts.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding()
+            .demoReadableContent(maximumWidth: 900)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
         }
         .navigationTitle("Bearer Authentication")
         .navigationBarTitleDisplayMode(.inline)

@@ -47,6 +47,7 @@ final class ManagedPlayerDemoSession: ObservableObject {
             let restorationCoordinator = self.restorationCoordinator
             let session = StreamPlayerSession(
                 source: source,
+                configuration: PlayerConfiguration(autoplay: true),
                 automaticallyStartsPictureInPictureWhenLeavingApp: true,
                 restorationHandler: { completion in
                     restorationCoordinator.restorePlayerInterface(completion)

@@ -26,9 +26,11 @@ struct FairPlayIntegrationDemoView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Test Axinom’s protected HLS vector on a physical iPhone or iPad. Enter a fresh Axinom License Service Message token. The demo keeps it in memory for this screen only.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                DemoScreenHeading(
+                    eyebrow: "DIGITAL RIGHTS",
+                    title: "FairPlay Streaming",
+                    subtitle: "Test Axinom’s protected HLS stream on a physical iPhone or iPad with a fresh, short-lived license token."
+                )
 
                 DemoPlayerView(
                     controller: controller,
@@ -39,9 +41,8 @@ struct FairPlayIntegrationDemoView: View {
                     controlsVisible: $controlsVisible,
                     isActiveSurface: !isFullscreen
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 12))
 
-                GroupBox("Playback status") {
+                DemoPanel("Playback status", symbol: "play.circle") {
                     VStack(alignment: .leading, spacing: 6) {
                         LabeledContent("Phase", value: String(describing: snapshot.phase))
                         LabeledContent("Intent", value: String(describing: snapshot.intent))
@@ -49,45 +50,49 @@ struct FairPlayIntegrationDemoView: View {
                     .font(.footnote)
                 }
 
-                Group {
-                    TextField("Protected HLS manifest URL", text: $streamURL)
-                        .keyboardType(.URL)
-                        .accessibilityLabel("Protected HLS manifest URL")
-                    TextField("FairPlay certificate URL", text: $certificateURL)
-                        .keyboardType(.URL)
-                        .accessibilityLabel("FairPlay certificate URL")
-                    TextField("FairPlay license URL", text: $licenseURL)
-                        .keyboardType(.URL)
-                        .accessibilityLabel("FairPlay license URL")
-                    SecureField("Axinom License Service Message token", text: $licenseToken)
-                        .textContentType(.oneTimeCode)
-                        .accessibilityLabel("Axinom license token")
-                }
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
+                DemoPanel("FairPlay configuration", symbol: "key.horizontal") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Group {
+                            TextField("Protected HLS manifest URL", text: $streamURL)
+                                .keyboardType(.URL)
+                                .accessibilityLabel("Protected HLS manifest URL")
+                            TextField("FairPlay certificate URL", text: $certificateURL)
+                                .keyboardType(.URL)
+                                .accessibilityLabel("FairPlay certificate URL")
+                            TextField("FairPlay license URL", text: $licenseURL)
+                                .keyboardType(.URL)
+                                .accessibilityLabel("FairPlay license URL")
+                            SecureField("Axinom License Service Message token", text: $licenseToken)
+                                .textContentType(.oneTimeCode)
+                                .accessibilityLabel("Axinom license token")
+                        }
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(.roundedBorder)
 
-                Button(action: loadProtectedStream) {
-                    if isLoading {
-                        ProgressView().frame(maxWidth: .infinity)
-                    } else {
-                        Label("Load protected stream", systemImage: "play.fill")
-                            .frame(maxWidth: .infinity)
+                        Button(action: loadProtectedStream) {
+                            if isLoading {
+                                ProgressView().frame(maxWidth: .infinity)
+                            } else {
+                                Label("Load protected stream", systemImage: "play.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isLoading || !canLoad)
+                        .accessibilityIdentifier("fairPlayLoadProtectedStream")
+
+                        if let errorMessage {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .accessibilityIdentifier("fairPlayLiveError")
+                        }
                     }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading || !canLoad)
-                .accessibilityIdentifier("fairPlayLoadProtectedStream")
-
-                if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .accessibilityIdentifier("fairPlayLiveError")
                 }
 
                 if diagnostics.latestMessage != nil {
-                    GroupBox("FairPlay request diagnostics") {
+                    DemoPanel("FairPlay request diagnostics", symbol: "doc.text.magnifyingglass") {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(diagnostics.logText)
                                 .font(.footnote.monospaced())
@@ -117,7 +122,7 @@ struct FairPlayIntegrationDemoView: View {
                     }
                 }
 
-                GroupBox("What this tests") {
+                DemoPanel("What this tests", symbol: "info.circle") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("StreamKit creates the AVContentKeySession and SPC. This demo downloads the public evaluation certificate, posts the SPC to Axinom, sends your token in X-AxDRM-Message, and returns the CKC to AVFoundation.")
                         Text("If AVFoundation requests a renewal, the diagnostics record it and the provider receives isRenewal = true. Renewal timing is controlled by the stream and license service; this public vector may not request a renewal during a short test.")
@@ -128,7 +133,9 @@ struct FairPlayIntegrationDemoView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding()
+            .demoReadableContent(maximumWidth: 920)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
         }
         .navigationTitle("Axinom FairPlay Test")
         .navigationBarTitleDisplayMode(.inline)

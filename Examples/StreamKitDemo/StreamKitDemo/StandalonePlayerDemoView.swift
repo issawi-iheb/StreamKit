@@ -17,50 +17,39 @@ struct StandalonePlayerDemoView: View {
     @State private var controlsVisible = true
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    DemoPlayerView(
-                        controller: session.playerController,
-                        pictureInPictureController: session.pictureInPictureController,
-                        snapshot: session.snapshot,
-                        trackState: session.trackState,
-                        isFullscreen: false,
-                        onFullscreen: {
-                            isFullscreen = true
-                        },
-                        controlsVisible: $controlsVisible,
-                        isActiveSurface: !isFullscreen
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                DemoPlayerView(
+                    controller: session.playerController,
+                    pictureInPictureController: session.pictureInPictureController,
+                    snapshot: session.snapshot,
+                    trackState: session.trackState,
+                    isFullscreen: false,
+                    onFullscreen: {
+                        isFullscreen = true
+                    },
+                    controlsVisible: $controlsVisible,
+                    isActiveSurface: !isFullscreen
+                )
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("StreamKit Demo")
-                            .font(.title2.bold())
+                DemoScreenHeading(
+                    eyebrow: "CUSTOM CONTROLS",
+                    title: "Build your player",
+                    subtitle: "StreamKit playback with app-owned controls, seeking, tracks, and fullscreen."
+                )
 
-                        Text("HLS • AVFoundation")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 16)
-
-                    if let errorMessage = session.errorMessage {
-                        Label(
-                            errorMessage,
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(.caption)
+                if let errorMessage = session.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
                         .foregroundStyle(.red)
-                        .padding(.horizontal, 16)
-                    }
-
-                    Spacer(minLength: 20)
                 }
-                .padding(.top, 12)
             }
-            .background(Color(uiColor: .systemBackground))
-            //.toolbar(.hidden, for: .navigationBar)
+            .demoReadableContent(maximumWidth: 1080)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
         }
+        .navigationTitle("Custom player")
+        .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(isPresented: $isFullscreen) {
             DemoPlayerView(
                 controller: session.playerController,
