@@ -1,5 +1,9 @@
 # StreamKit production-readiness audit
 
+## Current branch addendum — 2026-10-28
+
+The latest focused SDK/demo update is documented in [12_CURRENT_STATE_AND_DEMO_UX.md](12_CURRENT_STATE_AND_DEMO_UX.md). It records the managed, app-owned-controls, and advanced AVKit integration boundaries, refreshed demo visuals, and a passing managed-player fullscreen UI test on iPhone Duo / iOS 27.1 Simulator. This does not supersede the broader open production-readiness findings below; in particular, hardware PiP/restoration and minimum-iOS validation remain open.
+
 ## Implementation follow-up — 2026-10-21
 
 The follow-up implementation added controller command-generation guards for stale play/pause completions, suppressed invalid initial AVPlayer paused events during loading, preserved cancellation from bearer token providers, and moved standalone demo controller/PiP ownership into a retained playback session. README and architecture guidance now explain snapshot actor context, route/PiP ownership, and host-side audio focus. These are targeted reliability and integration improvements; they do not close seek-ordering, real PiP, FairPlay lifecycle, or minimum-OS validation gaps.

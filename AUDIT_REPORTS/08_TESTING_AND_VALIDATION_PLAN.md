@@ -1,5 +1,9 @@
 # Testing and validation plan
 
+## Current branch addendum — 2026-10-28
+
+The focused demo validation for revision `81496be` is recorded in [12_CURRENT_STATE_AND_DEMO_UX.md](12_CURRENT_STATE_AND_DEMO_UX.md). `StreamKitDemoUITests.testManagedPlayerCanEnterAndExitFullscreen` passed on the iPhone Duo / iOS 27.1 Simulator, and the simulator `build-for-testing` succeeded. The full Swift package suite was not rerun for this documentation/demo revision; the 115-test result below is from 2026-10-21. Physical-device PiP and restoration, broad device/layout coverage, and minimum-iOS compilation remain unverified.
+
 ## Existing coverage inventory
 
 Swift Testing is used in `Tests/StreamKitTests`; the current package suite contains **115 passing tests in 11 suites**. Coverage includes snapshot/error/value types; broadcaster normal delivery; controller loading, stale completions, shutdown, playback intent/phase, interruption, track forwarding, rates, command supersession, and multiple instances; AVFoundation engine shutdown/insecure FairPlay/instance isolation; authenticated loader URL/range/token helpers; FairPlay key-exchange provider orchestration. Demo XCTest/UI tests and a GitHub Actions workflow exist. No dedicated PiP-specific test suite or external consumer integration target is present. The latest UI test attempt did not complete; see validation below.

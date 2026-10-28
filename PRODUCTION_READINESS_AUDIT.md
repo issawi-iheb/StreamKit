@@ -1,5 +1,9 @@
 # StreamKit Production Readiness Audit Report
 
+## Current branch addendum — 2026-10-28
+
+The focused current demo and integration update is [AUDIT_REPORTS/12_CURRENT_STATE_AND_DEMO_UX.md](AUDIT_REPORTS/12_CURRENT_STATE_AND_DEMO_UX.md). It records the current managed-player integration guidance, simulator screenshots, and a passing managed fullscreen UI test on iPhone Duo / iOS 27.1 Simulator. This is not a replacement for the full readiness review; hardware PiP/restoration, minimum-iOS compatibility, and protected-stream lifecycle validation remain open. The dated assessment below is retained as historical evidence.
+
 ## Executive Summary
 
 This living report tracks StreamKit's production-readiness review against Phase 1 of the roadmap. The original findings below reflect earlier revisions; the later follow-up is authoritative when statuses or verification counts differ.

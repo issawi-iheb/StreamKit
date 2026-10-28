@@ -1,5 +1,9 @@
 # Findings register
 
+## Current demo validation addendum — 2026-10-28
+
+The focused managed fullscreen flow now has a passing iPhone Duo / iOS 27.1 Simulator UI test on revision `81496be`; see [12_CURRENT_STATE_AND_DEMO_UX.md](12_CURRENT_STATE_AND_DEMO_UX.md). This closes only the earlier lack of any fullscreen UI result for that route. It does not close hardware PiP/restoration or broad presentation coverage. TEST-001's package-suite result remains the 115 tests recorded below and was not repeated for this demo/docs revision.
+
 Severity definitions: **Critical** = immediate severe failure with broad exposure; **High** = major user/security failure in a core scenario; **Medium** = material reliability/integration risk or meaningful gap; **Low** = bounded usability/maintainability improvement. Confidence labels: Confirmed defect, Likely defect, Potential risk, Enhancement, Test gap, Not applicable. No confirmed defect was established by static evidence.
 
 | ID | Category | Severity | Classification | Summary | Exact location | Impact | Recommendation | Report | Depends on |

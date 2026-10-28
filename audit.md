@@ -1,5 +1,7 @@
 # StreamKit Comprehensive Code Audit Report
 
+> **Current status:** this document is a historical audit with later reconciliations. For the current branch's integration, demo visuals, and focused fullscreen UI evidence, see [AUDIT_REPORTS/12_CURRENT_STATE_AND_DEMO_UX.md](AUDIT_REPORTS/12_CURRENT_STATE_AND_DEMO_UX.md). That focused update does not replace the broader open production-readiness findings in [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md).
+
 > **Historical report — superseded as of 2026-10-16.** The findings and verdict below describe an earlier revision. In particular, AUDIT-001 (stale playback events) was resolved with generation-tagged events and a regression test; the 33-test count and production-readiness assessment are outdated. Use [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) for current findings and verification status.
 
 ## Executive Summary
