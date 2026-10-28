@@ -28,6 +28,23 @@ StreamKit offers three integration levels:
 
 Start with the managed player unless you need app-owned controls or explicit presentation lifecycle handling. VOD, live/DVR, bearer-authenticated HLS, cookies, user agent, and FairPlay are configured on `MediaSource`; choosing the managed entry point does not remove those capabilities. See [Architecture.md](Documentation/Architecture.md) for ownership boundaries.
 
+## Demo tour
+
+The demo keeps the integration paths distinct while sharing a consistent visual system for navigation cards, setup panels, and playback actions.
+
+| Demo route | What it demonstrates |
+| --- | --- |
+| Managed player | Ready-to-play VOD using `StreamPlayerView` and AVKit's standard controls, fullscreen, and PiP. |
+| Custom controls | App-owned playback, seeking, track selection, fullscreen, custom PiP, and playback diagnostics. |
+| AVKit & Picture in Picture | AVKit presentation versus the custom surface, with explicit PiP and restoration behavior. |
+| Live & DVR | Live source configuration, live-edge seeking, and observed seekable timeline. |
+| Multiple players | Two independent controllers and player surfaces running together. |
+| Audio & background | Interruption policy, playback intent, and simulated interruption notifications. |
+| Bearer authentication | HTTPS media URL, trusted hosts, and optional bearer token setup. |
+| FairPlay Streaming | Axinom test configuration, protected playback, and FairPlay request diagnostics. |
+
+The screenshots below are also embedded in the [architecture overview](Documentation/Architecture.md#demo-screens-and-visual-language), alongside the route and component ownership map.
+
 ## Screenshots
 
 These are captures from the StreamKit demo running in the iPhone Duo simulator. The home screen shows the responsive player showcase; the managed-player capture shows AVKit fullscreen during playback.

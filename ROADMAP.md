@@ -27,7 +27,7 @@ separate integration boundaries for DRM and advertising.
 - Audio and subtitle selection.
 - Playback-speed support and validation.
 - Snapshot broadcasting.
-- **Partial** — SwiftUI standalone and concurrent-player demos with native audio, subtitle, seeking and speed controls; Playlist and Playback Events remain labeled placeholders.
+- **Implemented; visual consistency pass build-verified** — The demo covers managed AVKit playback, app-owned controls/custom PiP, AVKit/PiP presentation, Live/DVR, multiple controllers, audio interruptions, bearer-authenticated HLS setup, and FairPlay. Shared page, panel, navigation-card, and action-button styles keep the examples visually related while preserving each player's distinct controls. Runtime visual review on a simulator was not available in the latest pass.
 - Automated unit tests for implemented behavior.
 
 ### ACCEPTANCE CRITERIA STATUS:
@@ -41,7 +41,7 @@ separate integration boundaries for DRM and advertising.
 - **In progress** — Regression coverage includes unknown-duration updates, repeated overlapping loads, explicit cancellation, and pending-item cleanup; real live AVFoundation behavior remains unverified.
 - **Implemented; Siri interruption verified on a physical iPhone running iOS 26.5** — Playback paused when Siri took audio focus and resumed afterward. Unit tests also cover allowed resumption, system-disallowed resumption, and explicit pause during an interruption. Background playback, other interruption sources, routing changes, and behavior across supported OS versions remain unverified. The host app owns process-wide audio-session configuration and the background-audio capability; multiple controllers handle interruptions independently, without shared audio-focus arbitration.
 - **Implemented, pending live protected-origin validation** — `MediaBearerAuthentication` supplies per-resource bearer tokens through a custom AVFoundation resource loader; HLS child URLs are rewritten, HTTPS is required, tokens are scoped to exact trusted hosts, and finite/open-ended byte ranges validate status, `Content-Range`, and response length. Generic arbitrary-header configuration remains absent.
-- **Implemented, simulator-verified** — The demo has a separate Protected Playback menu section. It resets track choices by source revision and rejects stale track-discovery results after a source change. Stable accessibility identifiers support its navigation tests. Playlist/Playback Events remain planned placeholders.
+- **Implemented** — The demo has dedicated Live/DVR, multiple-player, audio, bearer-authenticated HLS, and FairPlay routes. It resets track choices by source revision and rejects stale track-discovery results after a source change. Stable accessibility identifiers support its navigation tests.
 - **Updated 2026-10-22 — verified by unit tests** — 117 Swift package tests pass across 11 suites. Coverage includes controller lifecycle, cancellation, stale events and loads, playback commands, track selection, authenticated-request behavior, and snapshot broadcasting.
 - **Updated 2026-10-22 — partially verified on iOS Simulator and physical device** — 4 demo unit tests pass on iPhone 17 Pro / iOS 26.5. Generic iOS build and simulator `build-for-testing` pass. The UI test run stalled on debugger-version lookup warnings and was interrupted; no UI test result is claimed. The user verified PiP visibility/playback/dismissal and fullscreen entry/exit with control restoration on a physical device; broader device and OS coverage remains open.
 - **User-verified** — Basic playback works in the demo; the user also verified protected playback of the public Axinom FairPlay vector. This does not verify a customer-controlled origin or production DRM configuration.
@@ -52,6 +52,8 @@ separate integration boundaries for DRM and advertising.
 - **Implemented** — Public `StreamAVPlayerView` presents the same controller through `AVPlayerViewController` with system playback/PiP/AirPlay controls and opt-in automatic PiP. The demo has a separate AVKit/PiP entry, configures playback audio, and requests landscape for custom fullscreen. PiP and fullscreen flows were user-verified on a physical device; broader device and OS acceptance remains open.
 
 ### NEXT:
+- Add the shared diagnostics entry point to Live/DVR, audio, bearer, and multiple-player examples. For multiple players, keep each controller's event history identifiable so events cannot be mistaken for the other instance.
+- Exercise AVMetrics request and playback-summary reporting on a physical iOS 18+ device, then record which metrics are available for the supported stream types.
 - When protected-stream test materials are available, verify bearer authentication against a controlled HTTPS HLS origin: master and child playlists, segments, keys, ranges, redirects, token refresh, and cancellation on iOS. Public samples do not provide reusable bearer-protected media.
 - Validate failure mappings against representative real AVFoundation failures and refine unmapped cases.
 - Verify user pause during a real interruption, background playback, other interruption sources, cancellation, and audio routing on iOS 18+ devices and additional supported OS versions. Siri interruption and automatic resumption were confirmed on the user's iPhone running iOS 26.5.
@@ -86,7 +88,8 @@ separate integration boundaries for DRM and advertising.
 - **Implemented and package-tested** — Public normalized diagnostics events for load start/readiness/cancellation/failure, buffering transitions, playback end, audio interruptions, and FairPlay key-response outcomes. Events carry timestamps, source-load generations, and per-controller sequence numbers; no per-time-tick events are emitted.
 - **Implemented and package-tested** — Per-controller bounded replay and independent async subscribers. Late subscribers receive recent history, including startup from `StreamPlayerSession`; slow-consumer drops are detectable through sequence gaps. Delivery is best-effort and is not durable.
 - **Implemented and demo-build verified** — The Axinom sample report consumes the public diagnostics stream and excludes arbitrary provider response text, request hosts, credential length, URLs, and DRM payloads.
-- **Implemented in working tree** — iOS 18+ AVMetrics enrichment through a separate bounded metrics stream. Vendor analytics adapters, persistence/upload, and a public report builder remain deferred.
+- **Implemented and committed** — iOS 18+ AVMetrics enrichment through a separate bounded metrics stream. Vendor analytics adapters, persistence/upload, and a public report builder remain deferred.
+- **Partial demo integration** — Shared diagnostics panels are available from the managed, custom-controls, and AVKit/PiP routes. The FairPlay route includes its provider-specific request report. Live/DVR, multiple-player, audio, and bearer routes do not yet expose the shared diagnostics view; the multiple-player screen also needs a decision about per-controller versus combined presentation.
 - **Compatibility note** — The existing optional FairPlay callback remains unchanged and still exposes its error domain and code. The new common event stream includes the numeric error code only.
 
 ### ACCEPTANCE CRITERIA:
@@ -141,8 +144,8 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Latest commit**: `8bb1c08` (`Serialize managed player route shutdown`). The current working branch is `engineplayer-refactoring`; diagnostics changes are uncommitted.
-- **Current phase**: Phase 3 — normalized lifecycle diagnostics and iOS 18+ AVMetrics enrichment are implemented in the working tree. Analytics-provider integrations remain deferred. Phase 1 production-readiness and Phase 2 provider-specific acceptance gaps remain open.
-- **Latest local verification (2026-10-28)**: Swift package tests pass **165 tests in 16 suites** on the macOS host. The StreamKit demo builds for the generic iOS Simulator destination. No simulator runtime or physical-device AVMetrics flow was exercised in this verification.
+- **Latest code baseline**: `23fede9` (`Polish demo player visual consistency`) on `engineplayer-refactoring`. This identifies the code baseline rather than any later documentation-only commit.
+- **Current phase**: Phase 3 — normalized lifecycle diagnostics and iOS 18+ AVMetrics enrichment are implemented. Analytics-provider integrations remain deferred. Shared diagnostics UI is available on managed, custom-controls, and AVKit/PiP routes; FairPlay has its own request report. Additional example routes remain to be wired. Phase 1 production-readiness and Phase 2 provider-specific acceptance gaps remain open.
+- **Latest local verification (2026-10-28)**: The StreamKit demo builds for the generic iOS Simulator destination. CoreSimulator was unavailable for runtime visual inspection in the latest pass; no new screenshot or device verification is claimed here.
 - **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes the 2026-10-19 full SDK reassessment and the 2026-10-20 architecture and SDK comparison. StreamKit is not yet production-ready against Phase 1 criteria.
-- **Next milestone**: Exercise AVMetrics request and summary reporting in the demo on a physical device, review the legacy FairPlay callback's error-domain compatibility/privacy contract, and verify the iOS 18 package minimum in CI. Phase 1 device, CI, and protected-origin verification gaps remain open.
+- **Next milestone**: Extend the shared diagnostics UI to the remaining applicable demo routes, then exercise AVMetrics request and summary reporting on a physical iOS 18+ device. Also review the legacy FairPlay callback's error-domain compatibility/privacy contract and verify the package's iOS 18 minimum in CI. Phase 1 device, CI, and protected-origin verification gaps remain open.

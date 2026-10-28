@@ -20,6 +20,71 @@ For a practical source map and change guide, see [Contributing to StreamKit](Con
 
 All three paths use the same `MediaSource`, controller, and AVFoundation playback pipeline. VOD/live semantics, cookies, user agent, bearer-authenticated HLS, and FairPlay are source configuration. Provider credentials and DRM server protocol remain app-owned. `PlayerConfiguration.autoplay` defaults to `false`; the demo's managed example opts in so playback begins when the source is ready.
 
+## Demo screens and visual language
+
+The demo uses separate routes for integration examples. These screens share page spacing, panels, palette, and action-button styles; each route retains the controls that explain its particular capability.
+
+| Demo route | Player surface and responsibility |
+| --- | --- |
+| Managed player | `StreamPlayerView` with AVKit controls, VOD autoplay, and a route-level diagnostics entry. AVKit retains its native playback layout. |
+| Custom controls | `StreamVideoView` with app-owned controls, track selection, fullscreen, custom-layer PiP, and diagnostics. |
+| AVKit & PiP | A side-by-side integration choice between `StreamAVPlayerView` and `StreamVideoView`, with explicit presentation/PiP controls and diagnostics. |
+| Live & DVR | `StreamVideoView`, live-edge seek actions, and AVFoundation timeline reporting. |
+| Multiple players | Two independently controlled player instances in a responsive grid. |
+| Audio & background | Playback with interruption-policy explanation and test notification actions. |
+| Bearer authentication | Protected media setup and trusted-host/token inputs before playback. |
+| FairPlay Streaming | FairPlay setup, player status, and provider request diagnostics. |
+
+`DemoScrollContainer`, `DemoPanel`, `DemoPlaybackActions`, and the shared action styles provide common layout and interaction patterns for scrollable examples. The managed AVKit route and fullscreen surfaces intentionally keep their player-specific presentation. Playback diagnostics currently have shared panel styling on managed, custom-controls, and AVKit/PiP routes; FairPlay has a provider-specific request report. Expanding the shared diagnostics entry point to Live/DVR, multiple players, audio, and bearer examples remains a demo follow-up.
+
+```mermaid
+flowchart TB
+    Home[Demo home] --> Managed[Managed AVKit player]
+    Home --> Custom[Custom controls and custom PiP]
+    Home --> Presentation[AVKit and PiP comparison]
+    Home --> Live[Live and DVR]
+    Home --> Multiple[Multiple players]
+    Home --> Audio[Audio interruptions]
+    Home --> Bearer[Bearer-authenticated HLS]
+    Home --> FairPlay[FairPlay Streaming]
+
+    Managed --> Session[StreamPlayerSession]
+    Session --> ManagedController[StreamPlayerController]
+    Custom --> CustomController[StreamPlayerController]
+    Presentation --> PresentationController[StreamPlayerController]
+    Live --> LiveController[StreamPlayerController]
+    Multiple --> ControllerA[Controller A]
+    Multiple --> ControllerB[Controller B]
+    Audio --> AudioController[StreamPlayerController]
+    Bearer --> BearerController[StreamPlayerController]
+    FairPlay --> FairPlayController[StreamPlayerController]
+
+    Managed -. diagnostics .-> Diagnostics[Shared diagnostics panel]
+    Custom -. diagnostics .-> Diagnostics
+    Presentation -. diagnostics .-> Diagnostics
+    FairPlay -. request report .-> FairPlayReport[FairPlay request diagnostics]
+
+    Styles[Shared layout and action styles] -. visual styling only .-> Managed
+    Styles -. visual styling only .-> Custom
+    Styles -. visual styling only .-> Presentation
+    Styles -. visual styling only .-> Live
+    Styles -. visual styling only .-> Multiple
+    Styles -. visual styling only .-> Audio
+    Styles -. visual styling only .-> Bearer
+    Styles -. visual styling only .-> FairPlay
+```
+
+The shared style component has no playback ownership. Each route still owns or receives its player session/controller according to that example's lifecycle needs; the multiple-player route intentionally creates two independent controllers.
+
+The following captures are shared with the README. They illustrate the home and managed-player entry points; the route table above describes the other demos.
+
+<table>
+  <tr>
+    <td align="center"><strong>Player showcase</strong><br><img src="Screenshots/home-iphone-duo.png" alt="StreamKit demo home screen" width="520"></td>
+    <td align="center"><strong>Managed AVKit fullscreen</strong><br><img src="Screenshots/managed-player-fullscreen-iphone-duo.png" alt="Managed AVKit player in fullscreen" width="300"></td>
+  </tr>
+</table>
+
 ## Concurrency and Injection Boundaries
 
 - Public controller/session operations and the AVFoundation engine are `@MainActor` isolated. SwiftUI state should be updated on the main actor.
@@ -116,7 +181,7 @@ The managed facade changes the **presentation and session-lifecycle entry point*
 | Standard controls and PiP | Render with `StreamPlayerView`; optionally enable automatic PiP on app background. | Retain a `StreamPlayerSession` above the route and provide restoration behavior if playback/PiP must survive navigation. |
 | Custom controls | Use `StreamPlayerController` with `StreamVideoView`. | Build controls and own the view/session lifecycle. |
 
-The managed view does not supply DRM credentials or infer whether a URL is live. This is intentional: content type and provider-specific authorization are input configuration, while playback orchestration and AVKit presentation remain SDK responsibilities. Copyable setup examples for each managed option are in the README's [Quick Start](../README.md#quick-start). The demo's managed route uses autoplay for a ready-to-watch VOD example; its bearer and Axinom FairPlay screens use the lower-level controller path to expose those provider workflows and diagnostics. Their configured `MediaSource` values can be passed to `StreamPlayerView(source:)` or a retained `StreamPlayerSession` without changing the DRM/authentication pipeline. Demo screenshots and the latest build/UI verification are recorded in [the current review](../AUDIT_REPORTS/12_CURRENT_STATE_AND_DEMO_UX.md).
+The managed view does not supply DRM credentials or infer whether a URL is live. This is intentional: content type and provider-specific authorization are input configuration, while playback orchestration and AVKit presentation remain SDK responsibilities. Copyable setup examples for each managed option are in the README's [Quick Start](../README.md#quick-start). The demo's managed route uses autoplay for a ready-to-watch VOD example; its bearer and Axinom FairPlay screens use the lower-level controller path to expose those provider workflows and diagnostics. Their configured `MediaSource` values can be passed to `StreamPlayerView(source:)` or a retained `StreamPlayerSession` without changing the DRM/authentication pipeline.
 
 ## Platform Boundary
 - **Platform-independent**: Intent, Phase, Snapshot, Failure enums
