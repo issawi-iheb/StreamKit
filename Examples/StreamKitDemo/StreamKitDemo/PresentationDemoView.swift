@@ -67,6 +67,8 @@ struct PresentationDemoView: View {
                 }
                 .demoPlayerSurface()
 
+                PlaybackDiagnosticsPanel(controller: controller)
+
                 DemoScreenHeading(
                     eyebrow: "PRESENTATION",
                     title: "Picture in Picture",

@@ -29,7 +29,7 @@ struct AxinomFairPlayLicenseProvider: FairPlayLicenseProvider {
         } catch {
             let failure = error as NSError
             await diagnostics.record(
-                "Certificate request failed (\(failure.domain), code \(failure.code))."
+                "Certificate request failed (error code \(failure.code))."
             )
             throw AxinomDemoError.certificateRequestFailed
         }
@@ -68,7 +68,7 @@ struct AxinomFairPlayLicenseProvider: FairPlayLicenseProvider {
             throw AxinomDemoError.licenseRequestFailed
         }
         await diagnostics.record(
-            "Sending SPC with a non-empty X-AxDRM-Message header (\(tokenHeader.count) characters) to \(licenseURL.host ?? "unknown host")."
+            "Sending the FairPlay license request with a non-empty authorization header."
         )
 
         do {
@@ -78,16 +78,13 @@ struct AxinomFairPlayLicenseProvider: FairPlayLicenseProvider {
                 throw AxinomDemoError.licenseRequestFailed
             }
             guard (200..<300).contains(response.statusCode), !data.isEmpty else {
-                let serverMessage = response.value(forHTTPHeaderField: "X-AxDRM-ErrorMessage")
-                let detail = serverMessage.map { ": \($0)" } ?? "."
-                let responseHost = response.url?.host ?? "unknown host"
                 await diagnostics.record(
-                    "License request failed (HTTP \(response.statusCode), response host \(responseHost))\(detail)"
+                    "License request failed (HTTP \(response.statusCode))."
                 )
                 throw AxinomDemoError.licenseRequestFailed
             }
             await diagnostics.record(
-                "License request succeeded (HTTP \(response.statusCode), response host \(response.url?.host ?? "unknown host")); AVFoundation is preparing playback."
+                "License request succeeded (HTTP \(response.statusCode)); AVFoundation is preparing playback."
             )
             return data
         } catch is AxinomDemoError {
@@ -95,7 +92,7 @@ struct AxinomFairPlayLicenseProvider: FairPlayLicenseProvider {
         } catch {
             let failure = error as NSError
             await diagnostics.record(
-                "License request network failure (\(failure.domain), code \(failure.code))."
+                "License request network failure (error code \(failure.code))."
             )
             throw AxinomDemoError.licenseRequestFailed
         }
@@ -106,15 +103,38 @@ struct AxinomFairPlayLicenseProvider: FairPlayLicenseProvider {
 @MainActor
 final class FairPlayDemoDiagnostics {
     private(set) var entries: [String] = []
+    private(set) var playbackEvents: [PlaybackDiagnosticEvent] = []
+    private(set) var metricEvents: [PlaybackMetricEvent] = []
 
     var latestMessage: String? { entries.last }
-    var logText: String { entries.joined(separator: "\n") }
+    var logText: String {
+        let providerLog = entries.joined(separator: "\n")
+        let playbackLog = playbackEvents.map(Self.describe).joined(separator: "\n")
+        let metricsLog = metricEvents.map(Self.describe).joined(separator: "\n")
+        return [providerLog, playbackLog, metricsLog]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
 
     func record(_ message: String) {
         let timestamp = Date.now.formatted(date: .omitted, time: .standard)
         entries.append("[\(timestamp)] \(message)")
         if entries.count > 40 {
             entries.removeFirst(entries.count - 40)
+        }
+    }
+
+    func record(_ event: PlaybackDiagnosticEvent) {
+        playbackEvents.append(event)
+        if playbackEvents.count > 40 {
+            playbackEvents.removeFirst(playbackEvents.count - 40)
+        }
+    }
+
+    func record(_ event: PlaybackMetricEvent) {
+        metricEvents.append(event)
+        if metricEvents.count > 40 {
+            metricEvents.removeFirst(metricEvents.count - 40)
         }
     }
 
@@ -126,8 +146,69 @@ final class FairPlayDemoDiagnostics {
             "",
             logText,
             "",
-            "Sensitive data omitted: token, certificate, SPC, and CKC."
+            "The SDK event history is bounded; sequence gaps indicate missing events.",
+            "Sensitive data omitted: media and license URLs, server addresses, authorization values, provider response text, content identifiers, certificate, SPC, CKC, and rendition identifiers."
         ].joined(separator: "\n")
+    }
+
+    private static func describe(_ event: PlaybackDiagnosticEvent) -> String {
+        let time = event.timestamp.formatted(date: .omitted, time: .standard)
+        let message: String
+        switch event.kind {
+        case .loadStarted:
+            message = "Load started"
+        case .ready:
+            message = "Media ready"
+        case .bufferingStarted:
+            message = "Buffering started"
+        case let .bufferingEnded(duration):
+            message = "Buffering ended after \(duration.formatted(.number.precision(.fractionLength(2)))) seconds"
+        case let .loadCancelled(reason):
+            message = "Load cancelled (\(reason))"
+        case let .playbackFailed(code):
+            message = "Playback failed (\(code))"
+        case .ended:
+            message = "Playback ended"
+        case .audioInterruptionBegan:
+            message = "Audio interruption began"
+        case let .audioInterruptionEnded(systemAllowsResume, resumeRequested):
+            message = "Audio interruption ended (system resume allowed: \(systemAllowsResume), resume requested: \(resumeRequested))"
+        case .fairPlayContentKeyResponseAccepted:
+            message = "AVFoundation accepted the FairPlay content-key response"
+        case let .fairPlayContentKeyRequestFailed(errorCode):
+            message = "FairPlay content-key processing failed (error code \(errorCode))"
+        }
+
+        return "[\(time)] #\(event.sequence) load \(event.loadGeneration): \(message)"
+    }
+
+    private static func describe(_ event: PlaybackMetricEvent) -> String {
+        let time = event.timestamp.formatted(date: .omitted, time: .standard)
+        let message: String
+        switch event.kind {
+        case let .resourceRequest(resourceType, mediaType, requestDuration, responseDuration, segmentDuration, bytes, status, cached):
+            var details = "\(resourceType) \(mediaType) request \(requestDuration.formatted(.number.precision(.fractionLength(2))))s"
+            if let responseDuration {
+                details += ", response \(responseDuration.formatted(.number.precision(.fractionLength(2))))s"
+            }
+            if let segmentDuration {
+                details += ", segment \(segmentDuration.formatted(.number.precision(.fractionLength(2))))s"
+            }
+            if let bytes { details += ", \(bytes) bytes" }
+            if let status { details += ", HTTP \(status)" }
+            if cached { details += ", cache" }
+            message = details
+        case let .startupCompleted(timeToLikelyToKeepUp):
+            message = "Startup reached likely-to-keep-up in \(timeToLikelyToKeepUp.formatted(.number.precision(.fractionLength(2))))s"
+        case .stall:
+            message = "AVFoundation reported a playback stall"
+        case let .variantSwitch(succeeded):
+            message = "Variant switch \(succeeded ? "succeeded" : "failed")"
+        case let .playbackSummary(summary):
+            message = "Session summary: average bitrate \(summary.timeWeightedAverageBitrate) bits/s, peak \(summary.timeWeightedPeakBitrate) bits/s, \(summary.stallCount) stalls, \(summary.variantSwitchCount) variant switches"
+        }
+
+        return "[\(time)] #\(event.sequence) load \(event.loadGeneration): \(message)"
     }
 }
 

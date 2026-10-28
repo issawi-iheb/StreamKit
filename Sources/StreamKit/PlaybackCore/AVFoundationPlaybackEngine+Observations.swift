@@ -211,12 +211,15 @@ extension AVFoundationPlaybackEngine {
 
     // MARK: - Event Delivery
 
-    private func emit(_ event: PlaybackEngineEvent) {
+    func emit(
+        _ event: PlaybackEngineEvent,
+        generation: UInt64? = nil
+    ) {
         guard !isShutdown else { return }
 
         eventContinuation?.yield(
             PlaybackEngineEventEnvelope(
-                generation: activeSourceGeneration,
+                generation: generation ?? activeSourceGeneration,
                 event: event
             )
         )
@@ -238,6 +241,8 @@ extension AVFoundationPlaybackEngine {
 
     func removePlaybackObservers() {
         stopPausedLiveTimelineUpdates()
+        metricsTask?.cancel()
+        metricsTask = nil
         timeControlStatusObservation?.invalidate()
         timeControlStatusObservation = nil
 

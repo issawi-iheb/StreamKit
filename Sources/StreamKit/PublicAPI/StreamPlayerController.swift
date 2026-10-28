@@ -32,6 +32,24 @@ public final class StreamPlayerController {
         )
     }
 
+    /// A bounded stream of notable playback diagnostic events.
+    ///
+    /// Each subscriber receives the most recent retained events followed by
+    /// live events. Delivery is best-effort: slow consumers may miss events,
+    /// which can be detected by gaps in `sequence`. A first event with a
+    /// sequence greater than one means older history is outside the replay
+    /// window. UI consumers should iterate on the MainActor before updating UI state.
+    public var diagnosticEvents: AsyncStream<PlaybackDiagnosticEvent> {
+        diagnosticsBroadcaster.makeStream()
+    }
+
+    /// A bounded stream of AVFoundation performance metrics for the current
+    /// and recent source loads. High-volume request metrics use a separate
+    /// stream so they cannot crowd out lifecycle diagnostics.
+    public var metrics: AsyncStream<PlaybackMetricEvent> {
+        metricsBroadcaster.makeStream()
+    }
+
     // MARK: - Internal State
 
     // These members are module-internal so the responsibility-specific
@@ -42,6 +60,10 @@ public final class StreamPlayerController {
     /// Injected engine instances used internally may not provide a renderer.
     let renderingPlayer: AVPlayer?
     let snapshotBroadcaster = SnapshotBroadcaster()
+    let diagnosticsBroadcaster = PlaybackDiagnosticsBroadcaster()
+    let metricsBroadcaster = PlaybackMetricsBroadcaster()
+    var bufferingStartUptime: TimeInterval?
+    var bufferingStartLoadGeneration: UInt64?
 
     var eventTask: Task<Void, Never>?
     var activeLoadTask: Task<Void, Error>?
@@ -60,6 +82,16 @@ public final class StreamPlayerController {
 
     var isShutdown = false
     var shutdownTask: Task<Void, Never>?
+
+    func publishDiagnostic(
+        _ kind: PlaybackDiagnosticEvent.Kind,
+        loadGeneration: UInt64? = nil
+    ) {
+        diagnosticsBroadcaster.publish(
+            kind: kind,
+            loadGeneration: loadGeneration ?? self.loadGeneration
+        )
+    }
 
     // MARK: - Initialization
 

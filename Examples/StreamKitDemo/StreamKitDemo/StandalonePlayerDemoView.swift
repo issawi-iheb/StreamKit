@@ -32,6 +32,8 @@ struct StandalonePlayerDemoView: View {
                     isActiveSurface: !isFullscreen
                 )
 
+                PlaybackDiagnosticsPanel(controller: session.playerController)
+
                 DemoScreenHeading(
                     eyebrow: "CUSTOM CONTROLS",
                     title: "Build your player",

@@ -13,6 +13,14 @@ struct ManagedPlayerDemoView: View {
                 ProgressView()
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let session = sessionOwner.playerSession {
+                PlaybackDiagnosticsPanel(controller: session.controller)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+            }
+        }
         .navigationTitle("Managed Player")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)

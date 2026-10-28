@@ -39,4 +39,14 @@ enum PlaybackEngineEvent: Sendable {
 
     /// A playback failure occurred.
     case failed(PlaybackFailure)
+
+    /// AVFoundation accepted the FairPlay content-key response.
+    case fairPlayContentKeyResponseAccepted
+
+    /// AVFoundation rejected a FairPlay content-key request.
+    /// The error domain and localized description are deliberately omitted.
+    case fairPlayContentKeyRequestFailed(errorCode: Int)
+
+    /// A normalized AVFoundation playback metric.
+    case metric(date: Date, kind: PlaybackMetricEvent.Kind)
 }

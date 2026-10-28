@@ -36,6 +36,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     var timeObserverToken: Any?
     var itemEndObserver: NSObjectProtocol?
     var itemFailureObserver: NSObjectProtocol?
+    var metricsTask: Task<Void, Never>?
     var pausedLiveTimelineTimer: Timer?
 
     // Current item identity and generation.

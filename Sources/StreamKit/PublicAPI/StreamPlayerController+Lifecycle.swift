@@ -22,6 +22,9 @@ extension StreamPlayerController {
         }
 
         isShutdown = true
+        if snapshot.phase == .loading {
+            publishDiagnostic(.loadCancelled(.shutdown))
+        }
         audioPlaybackFocusCoordinator?.releaseFocus(for: self)
         loadGeneration &+= 1
         playbackCommandGeneration &+= 1
@@ -47,6 +50,8 @@ extension StreamPlayerController {
 
             snapshot = finalSnapshot
             snapshotBroadcaster.finish(with: finalSnapshot)
+            diagnosticsBroadcaster.finish()
+            metricsBroadcaster.finish()
         }
         self.shutdownTask = shutdownTask
         await shutdownTask.value

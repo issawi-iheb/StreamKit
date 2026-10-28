@@ -46,6 +46,8 @@ extension StreamPlayerController {
                 return
             }
 
+            publishDiagnostic(.audioInterruptionBegan)
+
             await engine.pause()
 
             switch snapshot.phase {
@@ -60,6 +62,12 @@ extension StreamPlayerController {
                 systemAllowsResume: systemAllowsResume,
                 automaticallyResumes: configuration.automaticallyResumesAfterAudioInterruption,
                 snapshot: snapshot
+            )
+            publishDiagnostic(
+                .audioInterruptionEnded(
+                    systemAllowsResume: systemAllowsResume,
+                    resumeRequested: shouldResume
+                )
             )
             guard shouldResume else {
                 return
@@ -120,6 +128,24 @@ extension StreamPlayerController {
     private func handleEngineEvent(
         _ event: PlaybackEngineEvent
     ) {
+        switch event {
+        case .fairPlayContentKeyResponseAccepted:
+            publishDiagnostic(.fairPlayContentKeyResponseAccepted)
+            return
+        case let .fairPlayContentKeyRequestFailed(errorCode):
+            publishDiagnostic(.fairPlayContentKeyRequestFailed(errorCode: errorCode))
+            return
+        case let .metric(date, kind):
+            metricsBroadcaster.publish(
+                timestamp: date,
+                loadGeneration: loadGeneration,
+                kind: kind
+            )
+            return
+        default:
+            break
+        }
+
         guard let newSnapshot = PlaybackEventReducer.reduce(event, from: snapshot) else {
             return
         }

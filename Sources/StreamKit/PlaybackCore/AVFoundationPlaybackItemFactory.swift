@@ -18,7 +18,10 @@ struct PreparedPlaybackItem {
 @MainActor
 enum AVFoundationPlaybackItemFactory {
 
-    static func make(from source: MediaSource) throws -> PreparedPlaybackItem {
+    static func make(
+        from source: MediaSource,
+        fairPlayDiagnosticHandler: ((FairPlayKeySessionDiagnostic) -> Void)? = nil
+    ) throws -> PreparedPlaybackItem {
         let request = source.requestConfiguration
 
         guard request.fairPlay == nil || source.url.scheme?.lowercased() == "https" else {
@@ -90,7 +93,10 @@ enum AVFoundationPlaybackItemFactory {
 
         let contentKeySession: FairPlayContentKeySession?
         if let fairPlay = request.fairPlay {
-            let session = FairPlayContentKeySession(configuration: fairPlay)
+            let session = FairPlayContentKeySession(
+                configuration: fairPlay,
+                onDiagnostic: fairPlayDiagnosticHandler
+            )
             session.addRecipient(asset)
             contentKeySession = session
         } else {

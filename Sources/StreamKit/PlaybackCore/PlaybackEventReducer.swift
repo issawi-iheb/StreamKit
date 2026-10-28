@@ -60,6 +60,11 @@ enum PlaybackEventReducer {
                 return nil
             }
             return changingPhase(to: .paused, from: snapshot)
+
+        case .fairPlayContentKeyResponseAccepted,
+             .fairPlayContentKeyRequestFailed,
+             .metric:
+            return nil
         }
     }
 

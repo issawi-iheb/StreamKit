@@ -92,7 +92,7 @@ struct FairPlayIntegrationDemoView: View {
                 }
 
                 if diagnostics.latestMessage != nil {
-                    DemoPanel("FairPlay request diagnostics", symbol: "doc.text.magnifyingglass") {
+                    DemoPanel("Playback and FairPlay diagnostics", symbol: "doc.text.magnifyingglass") {
                         VStack(alignment: .leading, spacing: 10) {
                             Text(diagnostics.logText)
                                 .font(.footnote.monospaced())
@@ -159,6 +159,16 @@ struct FairPlayIntegrationDemoView: View {
             }
         }
         .task {
+            for await event in controller.diagnosticEvents {
+                diagnostics.record(event)
+            }
+        }
+        .task {
+            for await event in controller.metrics {
+                diagnostics.record(event)
+            }
+        }
+        .task {
             await withTaskCancellationHandler {
                 while !Task.isCancelled {
                     do { try await Task.sleep(for: .seconds(3_600)) }
@@ -209,12 +219,7 @@ struct FairPlayIntegrationDemoView: View {
             url: media,
             requestConfiguration: MediaRequestConfiguration(
                 fairPlay: FairPlayConfiguration(
-                    licenseProvider: provider,
-                    diagnosticHandler: { event in
-                        Task { @MainActor in
-                            diagnostics.record(event.message)
-                        }
-                    }
+                    licenseProvider: provider
                 )
             )
         )

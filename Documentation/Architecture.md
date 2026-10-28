@@ -123,6 +123,16 @@ The managed view does not supply DRM credentials or infer whether a URL is live.
 - **Platform-dependent**: Actual AVFoundation integration in player implementation
 - Core architecture remains testable and reusable across Apple platforms
 
+## Diagnostics and logging
+
+- `PlaybackSnapshot` is the current-state API; `PlaybackDiagnosticEvent` is a separate, low-volume transition history.
+- The `@MainActor` controller normalizes load, readiness, buffering, failure, completion, interruption, and safe FairPlay outcomes. Engine events remain internal and are filtered by source generation before publication.
+- `PlaybackDiagnosticsBroadcaster` retains bounded history for late subscribers and fans out through bounded `AsyncStream` buffers. Delivery is best-effort; a sequence gap or a first event with sequence greater than one shows that history is incomplete. It is not durable storage.
+- The managed `StreamPlayerSession` forwards its controller's stream. It does not own a second event model or logger.
+- Events omit source URLs, headers, credentials, content identifiers, DRM payloads, provider response text, and raw error descriptions. FairPlay failure events include a numeric code only; the existing optional FairPlay callback remains separate.
+- StreamKit is silent by default and has no logger manager. Host apps may adapt events to `Logger` or an analytics provider.
+- `PlaybackMetricEvent` is a separate bounded stream backed by `AVPlayerItem.allMetrics()`. It normalizes request timings/response details, startup, stalls, variant switches, and playback summaries. Separating it from low-volume lifecycle diagnostics prevents HLS request traffic from displacing lifecycle events. URLs, server addresses, rendition identifiers, and raw AVFoundation values are not exposed.
+
 ## Authenticated Media Requests
 - Regular HTTPS media continues through AVFoundation's native `AVURLAsset` loading path.
 - Bearer-authenticated media uses an `AVAssetResourceLoader` owned by the playback engine.

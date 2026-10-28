@@ -10,6 +10,7 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
     private let session: AVContentKeySession
     private let exchange: FairPlayKeyExchange
     private let diagnosticHandler: (@Sendable (FairPlayKeySessionDiagnostic) -> Void)?
+    private let onDiagnostic: ((FairPlayKeySessionDiagnostic) -> Void)?
     private let delegateQueue = DispatchQueue(label: "StreamKit.FairPlayContentKeySession")
     private lazy var requestLifecycle = FairPlayKeyRequestLifecycle<AVContentKeyRequest>(
         processor: { [weak self] request, isRenewal in
@@ -31,9 +32,13 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
     private var isInvalidated = false
     private var recipient: AVURLAsset?
 
-    init(configuration: FairPlayConfiguration) {
+    init(
+        configuration: FairPlayConfiguration,
+        onDiagnostic: ((FairPlayKeySessionDiagnostic) -> Void)? = nil
+    ) {
         self.exchange = FairPlayKeyExchange(provider: configuration.licenseProvider)
         self.diagnosticHandler = configuration.diagnosticHandler
+        self.onDiagnostic = onDiagnostic
         self.session = AVContentKeySession(keySystem: .fairPlayStreaming)
         super.init()
         session.setDelegate(self, queue: delegateQueue)
@@ -79,7 +84,10 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
         contentKeyRequestDidSucceed keyRequest: AVContentKeyRequest
     ) {
         Task { @MainActor [weak self] in
-            self?.diagnosticHandler?(.contentKeyResponseAccepted)
+            guard let self else { return }
+            let event = FairPlayKeySessionDiagnostic.contentKeyResponseAccepted
+            self.onDiagnostic?(event)
+            self.diagnosticHandler?(event)
         }
     }
 
@@ -94,7 +102,9 @@ final class FairPlayContentKeySession: NSObject, AVContentKeySessionDelegate {
             errorCode: failure.code
         )
         Task { @MainActor [weak self] in
-            self?.diagnosticHandler?(event)
+            guard let self else { return }
+            self.onDiagnostic?(event)
+            self.diagnosticHandler?(event)
         }
     }
 

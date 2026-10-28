@@ -31,7 +31,23 @@ extension AVFoundationPlaybackEngine {
         player.pause()
         player.replaceCurrentItem(with: nil)
 
-        let preparedItem = try AVFoundationPlaybackItemFactory.make(from: source)
+        let preparedItem = try AVFoundationPlaybackItemFactory.make(
+            from: source,
+            fairPlayDiagnosticHandler: { [weak self] diagnostic in
+                switch diagnostic {
+                case .contentKeyResponseAccepted:
+                    self?.emit(
+                        .fairPlayContentKeyResponseAccepted,
+                        generation: sourceGeneration
+                    )
+                case let .contentKeyRequestFailed(_, errorCode):
+                    self?.emit(
+                        .fairPlayContentKeyRequestFailed(errorCode: errorCode),
+                        generation: sourceGeneration
+                    )
+                }
+            }
+        )
         authenticatedResourceLoader = preparedItem.authenticatedResourceLoader
         fairPlayContentKeySession = preparedItem.fairPlayContentKeySession
         let item = preparedItem.item
@@ -47,6 +63,13 @@ extension AVFoundationPlaybackEngine {
             generation: engineGeneration,
             presentationKind: source.presentationKind
         )
+        if #available(macOS 15, iOS 18, *) {
+            installMetricsObserver(
+                for: item,
+                engineGeneration: engineGeneration,
+                sourceGeneration: sourceGeneration
+            )
+        }
         try await waitForReadiness(of: item, generation: engineGeneration)
     }
 

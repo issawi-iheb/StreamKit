@@ -1,13 +1,13 @@
 # StreamKit
 
-A reusable Swift media-player SDK for iOS 16+ built with Swift 6.4. StreamKit provides independent playback instances with state observation, track selection, and clean resource management.
+A reusable Swift media-player SDK for iOS 18+ built with Swift 6.4. StreamKit provides independent playback instances with state observation, track selection, and clean resource management.
 
 ## Requirements
 
-- iOS 16.0 or later
+- iOS 18.0 or later
 - Swift 6.4 toolchain
 
-The package declares iOS 16 support. The demo project currently targets iOS 26.5 and does not yet validate the package's minimum deployment target; this is tracked in the roadmap.
+The package and demo require iOS 18 or later. The demo project currently targets iOS 26.5.
 
 ## Installation
 
@@ -223,6 +223,57 @@ Task { @MainActor in
 ```
 
 The controller publishes snapshots from the MainActor. `AsyncStream` does not isolate its consumer, so UI code should consume snapshots from a MainActor task (as shown above) or explicitly hop to the UI actor before updating view state.
+
+## Playback Diagnostics
+
+Use `diagnosticEvents` for a history of notable playback transitions. Snapshots remain the current-state API for UI; diagnostics do not repeat playback-time updates.
+
+```swift
+import OSLog
+
+let logger = Logger(subsystem: "com.example.app", category: "Playback")
+let diagnostics = controller.diagnosticEvents
+Task { @MainActor in
+    for await event in diagnostics {
+        switch event.kind {
+        case .loadStarted:
+            logger.info("Load started")
+        case .ready:
+            logger.info("Media is ready")
+        case .bufferingStarted:
+            logger.info("Buffering started")
+        case let .bufferingEnded(duration):
+            logger.info("Buffering ended after \(duration, privacy: .public) seconds")
+        case let .playbackFailed(code):
+            logger.error("Playback failed: \(String(describing: code), privacy: .public)")
+        default:
+            break
+        }
+    }
+}
+```
+
+The stream includes bounded recent history followed by live events. Delivery is best-effort: if a subscriber falls behind, events may be dropped. A sequence gap, or a first event with a sequence greater than one, means the received history is incomplete. UI consumers should iterate from a MainActor task. `StreamPlayerSession.diagnosticEvents` forwards the controller's events, including startup activity that occurred during managed-session creation.
+
+### AVFoundation performance metrics
+
+`controller.metrics` and `session.metrics` expose a separate bounded stream backed by Apple's [iOS 18+ AVMetrics API](https://developer.apple.com/documentation/avfoundation/avmetrics). It reports generic resource requests and HLS playlist, segment, and content-key request timings and response details when AVFoundation provides them, startup completion, stalls, variant-switch outcomes, and the final playback summary, including time-weighted average and peak bitrate. Request fields are normalized; URLs, server addresses, headers, rendition identifiers, and raw AVFoundation objects are omitted. Progressive streams may provide generic request metrics without HLS-specific segment events. This is an observability stream, not a replacement for lifecycle diagnostics; it is best-effort and slow subscribers can miss events.
+
+```swift
+for await metric in controller.metrics {
+    switch metric.kind {
+    case let .playbackSummary(summary):
+        print("Average bitrate: \(summary.timeWeightedAverageBitrate) bits/s")
+        print("Stalls: \(summary.stallCount)")
+    case let .resourceRequest(_, _, requestDuration, _, _, bytes, status, _):
+        print("Request: \(requestDuration)s, bytes: \(String(describing: bytes)), HTTP: \(String(describing: status))")
+    default:
+        break
+    }
+}
+```
+
+Events contain normalized categories and safe values. They omit media URLs, request headers, credentials, DRM payloads, provider response text, and raw AVFoundation error descriptions. StreamKit does not write them to a logger or send them to a service. The host app chooses whether to adapt them to Apple's `Logger`, an analytics SDK, or a support report. Do not add sensitive values back when formatting logs.
 
 ## Playback Controls
 

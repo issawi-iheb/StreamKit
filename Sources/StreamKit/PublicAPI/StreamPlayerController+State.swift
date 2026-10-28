@@ -12,8 +12,35 @@ extension StreamPlayerController {
             return
         }
 
+        let previousPhase = snapshot.phase
         snapshot = newSnapshot
         snapshotBroadcaster.publish(newSnapshot)
+
+        if previousPhase != .waiting, newSnapshot.phase == .waiting {
+            bufferingStartUptime = ProcessInfo.processInfo.systemUptime
+            bufferingStartLoadGeneration = loadGeneration
+            publishDiagnostic(.bufferingStarted)
+        } else if previousPhase == .waiting, newSnapshot.phase != .waiting {
+            let start = bufferingStartUptime ?? ProcessInfo.processInfo.systemUptime
+            let sourceGeneration = bufferingStartLoadGeneration ?? loadGeneration
+            bufferingStartUptime = nil
+            bufferingStartLoadGeneration = nil
+            let duration = max(0, ProcessInfo.processInfo.systemUptime - start)
+            publishDiagnostic(
+                .bufferingEnded(duration: duration),
+                loadGeneration: sourceGeneration
+            )
+        }
+
+        if previousPhase != .ready, newSnapshot.phase == .ready {
+            publishDiagnostic(.ready)
+        }
+        if previousPhase != .failed, newSnapshot.phase == .failed {
+            publishDiagnostic(.playbackFailed(newSnapshot.failure?.code ?? .unknown))
+        }
+        if previousPhase != .ended, newSnapshot.phase == .ended {
+            publishDiagnostic(.ended)
+        }
     }
 
     func updateIntent(

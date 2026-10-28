@@ -100,6 +100,7 @@ extension StreamPlayerController {
                 }
 
                 if error is CancellationError {
+                    publishDiagnostic(.loadCancelled(.requested))
                     updateSnapshot(
                         PlaybackSnapshot(
                             phase: .idle,
@@ -131,6 +132,9 @@ extension StreamPlayerController {
     private func beginLoading(
         presentationKind: MediaPresentationKind
     ) -> UInt64 {
+        if snapshot.phase == .loading {
+            publishDiagnostic(.loadCancelled(.replacedByNewSource))
+        }
         loadGeneration &+= 1
         playbackCommandGeneration &+= 1
         seekGeneration &+= 1
@@ -151,6 +155,7 @@ extension StreamPlayerController {
                 timeline: PlaybackTimeline(presentationKind: presentationKind)
             )
         )
+        publishDiagnostic(.loadStarted)
 
         return generation
     }

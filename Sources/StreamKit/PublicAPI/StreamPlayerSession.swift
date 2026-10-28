@@ -15,6 +15,18 @@ public final class StreamPlayerSession: ObservableObject {
     /// that the session does not wrap, such as track selection.
     public let controller: StreamPlayerController
 
+    /// A bounded stream of diagnostic events from the managed session's player.
+    /// Recent events include startup activity that occurred during initialization.
+    public var diagnosticEvents: AsyncStream<PlaybackDiagnosticEvent> {
+        controller.diagnosticEvents
+    }
+
+    /// AVFoundation performance metrics, including request and session summary
+    /// values. See `StreamPlayerController.metrics` for buffering semantics.
+    public var metrics: AsyncStream<PlaybackMetricEvent> {
+        controller.metrics
+    }
+
     /// AVKit presentation and Picture in Picture lifecycle for this session.
     public let presentationController: StreamAVPlayerPresentationController
 
