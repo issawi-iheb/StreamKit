@@ -30,8 +30,14 @@ struct PresentationDemoView: View {
     )!
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        DemoScrollContainer {
+                DemoScreenHeading(
+                    eyebrow: "PRESENTATION",
+                    title: "Picture in Picture",
+                    subtitle: "Compare Apple’s AVKit controls with StreamKit’s custom player."
+                )
+                .accessibilityIdentifier("presentation-player-interface-ready")
+
                 ZStack(alignment: .bottomTrailing) {
                     Group {
                         if usesSystemPlayer {
@@ -69,17 +75,7 @@ struct PresentationDemoView: View {
 
                 PlaybackDiagnosticsPanel(controller: controller)
 
-                DemoScreenHeading(
-                    eyebrow: "PRESENTATION",
-                    title: "Picture in Picture",
-                    subtitle: "Compare Apple’s AVKit controls with StreamKit’s custom player."
-                )
-                .accessibilityIdentifier("presentation-player-interface-ready")
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Player style", systemImage: "rectangle.on.rectangle")
-                        .font(.headline)
-
+                DemoPanel("Player style", symbol: "rectangle.on.rectangle") {
                     Picker("Player controls", selection: $usesSystemPlayer) {
                         Text("System AVKit").tag(true)
                         Text("Custom").tag(false)
@@ -87,14 +83,10 @@ struct PresentationDemoView: View {
                     .pickerStyle(.segmented)
                     .accessibilityIdentifier("presentation-renderer-picker")
                 }
-                .demoCardSurface()
 
-                VStack(alignment: .leading, spacing: 14) {
-                    Label("Playback", systemImage: "play.circle")
-                        .font(.headline)
-
-                    HStack(spacing: 12) {
-                        Button {
+                DemoPanel("Playback", symbol: "play.circle") {
+                    DemoPlaybackActions(
+                        onPlay: {
                             Task {
                                 do {
                                     try await controller.play()
@@ -102,20 +94,11 @@ struct PresentationDemoView: View {
                                     errorMessage = error.localizedDescription
                                 }
                             }
-                        } label: {
-                            Label("Play", systemImage: "play.fill")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-
-                        Button {
+                        },
+                        onPause: {
                             Task { await controller.pause() }
-                        } label: {
-                            Label("Pause", systemImage: "pause.fill")
-                                .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
-                    }
+                    )
 
                     if !usesSystemPlayer {
                         Button {
@@ -124,17 +107,13 @@ struct PresentationDemoView: View {
                             Label("Start Picture in Picture", systemImage: "pip")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                        .demoSecondaryActionButtonStyle()
                         .disabled(!pictureInPictureController.isPictureInPicturePossible)
                         .accessibilityIdentifier("presentation-start-pip")
                     }
                 }
-                .demoCardSurface()
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("PiP behavior", systemImage: "pip")
-                        .font(.headline)
-
+                DemoPanel("PiP behavior", symbol: "pip") {
                     Toggle(
                         "Start PiP when leaving the app",
                         isOn: $automaticallyStartsPictureInPicture
@@ -159,35 +138,20 @@ struct PresentationDemoView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .demoCardSurface()
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Session status", systemImage: "waveform.path")
-                        .font(.headline)
-
+                DemoPanel("Session status", symbol: "waveform.path") {
                     LabeledContent("Playback", value: String(describing: snapshot.phase).capitalized)
                         .accessibilityIdentifier("presentation-playback-phase")
                     Divider()
                     LabeledContent("Picture in Picture", value: activePictureInPictureState == .idle ? "Inactive" : "Active")
                         .accessibilityIdentifier("presentation-pip-state")
                 }
-                .demoCardSurface()
 
                 if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                    DemoInlineNotice(errorMessage)
                         .accessibilityIdentifier("presentation-error")
                 }
-            }
-            .demoReadableContent(maximumWidth: 1080)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
         }
-        .background(Color(uiColor: .systemBackground))
         .navigationTitle("StreamKit & PiP")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

@@ -152,6 +152,7 @@ struct DemoHomeView: View {
                 ManagedPlayerDemoView(sessionOwner: managedPlayerSession)
             }
         }
+        .tint(DemoPalette.accent)
         .onAppear {
             standalonePlayerSession.requestPlayerRoute = {
                 isStandalonePlayerPresented = true
@@ -255,19 +256,32 @@ struct DemoHomeView: View {
                             .tracking(1.4)
                             .foregroundStyle(.white.opacity(0.8))
 
-                        Spacer()
+                        Spacer(minLength: 8)
 
-                        Image(systemName: "sparkles")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .accessibilityHidden(true)
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(DemoPalette.accentBright)
+                                .frame(width: 6, height: 6)
+                                .accessibilityHidden(true)
+
+                            Text(managedPlayerSession.playerEntryStatusLabel.uppercased())
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .tracking(0.8)
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.white.opacity(0.88))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.white.opacity(0.10), in: Capsule())
                     }
 
                     Spacer(minLength: 32)
 
-                    Text(managedPlayerSession.playerEntryStatusTitle)
+                    Text("Managed player")
                         .font(.system(.title2, design: .rounded, weight: .bold))
                         .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
 
                     Text("Starts a VOD stream immediately with AVKit controls and Picture in Picture.")
                         .font(.subheadline)
@@ -301,6 +315,10 @@ struct DemoHomeView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(title)
                     .font(.system(.title3, design: .rounded, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
 
                 Rectangle()
                     .fill(.quaternary)
@@ -324,39 +342,44 @@ private struct DemoNavigationCard: View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.tint)
+                .foregroundStyle(DemoPalette.accentBright)
                 .frame(width: 42, height: 42)
-                .background(.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(DemoPalette.accent.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(title)
                     .font(.headline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.white)
 
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.70))
                     .multilineTextAlignment(.leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .padding(.top, 4)
-                .accessibilityHidden(true)
         }
         .padding(15)
         .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
-        .background(
-            Color(uiColor: .secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.10, green: 0.15, blue: 0.21),
+                            Color(red: 0.07, green: 0.11, blue: 0.17)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(.primary.opacity(0.045), lineWidth: 1)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
         }
+        .shadow(color: DemoPalette.accentDeep.opacity(0.08), radius: 14, x: 0, y: 6)
         .accessibilityElement(children: .combine)
     }
 }

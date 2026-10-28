@@ -17,38 +17,31 @@ struct StandalonePlayerDemoView: View {
     @State private var controlsVisible = true
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                DemoPlayerView(
-                    controller: session.playerController,
-                    pictureInPictureController: session.pictureInPictureController,
-                    snapshot: session.snapshot,
-                    trackState: session.trackState,
-                    isFullscreen: false,
-                    onFullscreen: {
-                        isFullscreen = true
-                    },
-                    controlsVisible: $controlsVisible,
-                    isActiveSurface: !isFullscreen
-                )
+        DemoScrollContainer {
+            DemoScreenHeading(
+                eyebrow: "CUSTOM CONTROLS",
+                title: "Build your player",
+                subtitle: "StreamKit playback with app-owned controls, seeking, tracks, and fullscreen."
+            )
 
-                PlaybackDiagnosticsPanel(controller: session.playerController)
+            DemoPlayerView(
+                controller: session.playerController,
+                pictureInPictureController: session.pictureInPictureController,
+                snapshot: session.snapshot,
+                trackState: session.trackState,
+                isFullscreen: false,
+                onFullscreen: {
+                    isFullscreen = true
+                },
+                controlsVisible: $controlsVisible,
+                isActiveSurface: !isFullscreen
+            )
 
-                DemoScreenHeading(
-                    eyebrow: "CUSTOM CONTROLS",
-                    title: "Build your player",
-                    subtitle: "StreamKit playback with app-owned controls, seeking, tracks, and fullscreen."
-                )
+            PlaybackDiagnosticsPanel(controller: session.playerController)
 
-                if let errorMessage = session.errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                }
+            if let errorMessage = session.errorMessage {
+                DemoInlineNotice(errorMessage)
             }
-            .demoReadableContent(maximumWidth: 1080)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
         }
         .navigationTitle("Custom player")
         .navigationBarTitleDisplayMode(.inline)

@@ -16,8 +16,7 @@ struct BearerAuthenticatedPlayerDemoView: View {
     @State private var controlsVisible = true
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+        DemoScrollContainer {
                 DemoScreenHeading(
                     eyebrow: "SECURE PLAYBACK",
                     title: "Bearer authentication",
@@ -32,6 +31,7 @@ struct BearerAuthenticatedPlayerDemoView: View {
 
                         TextField("https://media.example.com/master.m3u8", text: $mediaURL)
                             .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                             .keyboardType(.URL)
                             .textFieldStyle(.roundedBorder)
                             .accessibilityLabel("HTTPS media URL")
@@ -39,10 +39,12 @@ struct BearerAuthenticatedPlayerDemoView: View {
                         TextField("media.example.com, cdn.example.com", text: $trustedHosts)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .keyboardType(.URL)
                             .textFieldStyle(.roundedBorder)
                             .accessibilityLabel("Trusted media hosts")
 
                         SecureField("Bearer token", text: $bearerToken)
+                            .textInputAutocapitalization(.never)
                             .textFieldStyle(.roundedBorder)
                             .accessibilityLabel("Bearer token")
 
@@ -56,13 +58,11 @@ struct BearerAuthenticatedPlayerDemoView: View {
                                     .frame(maxWidth: .infinity)
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .demoPrimaryActionButtonStyle()
                         .disabled(isLoading || !canLoad)
 
                         if let errorMessage {
-                            Text(errorMessage)
-                                .font(.caption)
-                                .foregroundStyle(.red)
+                            DemoInlineNotice(errorMessage)
                                 .accessibilityIdentifier("bearer-auth-error")
                         }
                     }
@@ -83,10 +83,6 @@ struct BearerAuthenticatedPlayerDemoView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-            }
-            .demoReadableContent(maximumWidth: 900)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
         }
         .navigationTitle("Bearer Authentication")
         .navigationBarTitleDisplayMode(.inline)

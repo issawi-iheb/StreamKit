@@ -10,56 +10,55 @@ struct LiveDVRDemoView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                StreamVideoView(controller: controller)
-                    .demoPlayerSurface()
-
+        DemoScrollContainer {
                 DemoScreenHeading(
                     eyebrow: "LIVE PLAYBACK",
                     title: "Live & DVR",
                     subtitle: "Seek to the live edge or explore the stream’s available DVR window."
                 )
 
-                Text("Starts with the public RT live stream. You can replace its HTTPS manifest URL below; available DVR history is controlled by the stream.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                DemoPanel("Live stream", symbol: "dot.radiowaves.left.and.right") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Starts with the public RT live stream. You can replace its HTTPS manifest URL below; available DVR history is controlled by the stream.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
 
-                TextField("https://example.com/live/playlist.m3u8", text: $streamURL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Live HLS manifest URL")
+                        TextField("https://example.com/live/playlist.m3u8", text: $streamURL)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Live HLS manifest URL")
 
-                Button(action: loadLiveStream) {
-                    if isLoading {
-                        ProgressView().frame(maxWidth: .infinity)
-                    } else {
-                        Label("Load live stream", systemImage: "dot.radiowaves.left.and.right")
-                            .frame(maxWidth: .infinity)
+                        Button(action: loadLiveStream) {
+                            if isLoading {
+                                ProgressView().frame(maxWidth: .infinity)
+                            } else {
+                                Label("Load live stream", systemImage: "dot.radiowaves.left.and.right")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .demoPrimaryActionButtonStyle()
+                        .disabled(isLoading || !canLoad)
+                        .accessibilityIdentifier("liveDVRLoadStream")
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isLoading || !canLoad)
-                .accessibilityIdentifier("liveDVRLoadStream")
 
-                HStack {
-                    Button {
-                        Task { await performPlaybackCommand { try await controller.play() } }
-                    } label: {
-                        Label("Play", systemImage: "play.fill")
-                    }
-                    .disabled(!isLoaded || snapshot.intent == .play)
+                StreamVideoView(controller: controller)
+                    .demoPlayerSurface()
 
-                    Button {
-                        Task { await performPlaybackCommand { await controller.pause() } }
-                    } label: {
-                        Label("Pause", systemImage: "pause.fill")
-                    }
-                    .disabled(!isLoaded || snapshot.intent == .pause)
+                DemoPanel("Playback controls", symbol: "play.circle") {
+                    DemoPlaybackActions(
+                        onPlay: {
+                            Task { await performPlaybackCommand { try await controller.play() } }
+                        },
+                        onPause: {
+                            Task { await performPlaybackCommand { await controller.pause() } }
+                        },
+                        isPlayDisabled: !isLoaded || snapshot.intent == .play,
+                        isPauseDisabled: !isLoaded || snapshot.intent == .pause
+                    )
                 }
-                .buttonStyle(.bordered)
 
                 DemoPanel("Live DVR seeking", symbol: "gobackward") {
                     VStack(alignment: .leading, spacing: 10) {
@@ -115,14 +114,8 @@ struct LiveDVRDemoView: View {
                 .accessibilityIdentifier("liveDVRTimeline")
 
                 if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                    DemoInlineNotice(errorMessage)
                 }
-            }
-            .demoReadableContent(maximumWidth: 1000)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
         }
         .navigationTitle("Live & DVR")
         .navigationBarTitleDisplayMode(.inline)

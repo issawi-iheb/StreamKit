@@ -23,8 +23,7 @@ struct AudioSessionDemoView: View {
     )!
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+        DemoScrollContainer {
                 DemoScreenHeading(
                     eyebrow: "AUDIO",
                     title: "Sessions & interruptions",
@@ -52,9 +51,14 @@ struct AudioSessionDemoView: View {
                     .font(.footnote)
                 }
 
-                LabeledContent("Playback phase", value: String(describing: snapshot.phase))
-                    .accessibilityIdentifier("audio-session-playback-phase")
-                LabeledContent("Playback intent", value: String(describing: snapshot.intent))
+                DemoPanel("Playback state", symbol: "waveform.path") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        LabeledContent("Playback phase", value: String(describing: snapshot.phase))
+                            .accessibilityIdentifier("audio-session-playback-phase")
+                        LabeledContent("Playback intent", value: String(describing: snapshot.intent))
+                    }
+                    .font(.footnote)
+                }
 
                 DemoPanel("Simulated interruption checks", symbol: "waveform") {
                     VStack(alignment: .leading, spacing: 10) {
@@ -65,30 +69,24 @@ struct AudioSessionDemoView: View {
                         Button("Simulate interruption began") {
                             postInterruption(.began)
                         }
-                        .buttonStyle(.bordered)
+                        .demoSecondaryActionButtonStyle()
 
-                        Button("End interruption — resume allowed") {
+                        Button("End — resume playback") {
                             postInterruption(.ended, options: [.shouldResume])
                         }
-                        .buttonStyle(.bordered)
+                        .demoSecondaryActionButtonStyle()
 
-                        Button("End interruption — resume not allowed") {
+                        Button("End — stay paused") {
                             postInterruption(.ended)
                         }
-                        .buttonStyle(.bordered)
+                        .demoSecondaryActionButtonStyle()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 if let errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                    DemoInlineNotice(errorMessage)
                 }
-            }
-            .demoReadableContent(maximumWidth: 920)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
         }
         .navigationTitle("Audio Session")
         .navigationBarTitleDisplayMode(.inline)

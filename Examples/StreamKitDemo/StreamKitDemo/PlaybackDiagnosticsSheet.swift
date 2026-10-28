@@ -21,16 +21,17 @@ struct PlaybackDiagnosticsPanel: View {
                 Label("View", systemImage: "list.bullet.rectangle")
             }
             .buttonStyle(.bordered)
+            .tint(DemoPalette.accent)
             .accessibilityLabel("View playback diagnostics")
             .accessibilityIdentifier("playback-diagnostics-button")
         }
         .padding(12)
         .background(
             Color(uiColor: .secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            in: RoundedRectangle(cornerRadius: DemoLayoutMetrics.cardCornerRadius, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: DemoLayoutMetrics.cardCornerRadius, style: .continuous)
                 .strokeBorder(.primary.opacity(0.045), lineWidth: 1)
         }
         .sheet(isPresented: $isPresented) {

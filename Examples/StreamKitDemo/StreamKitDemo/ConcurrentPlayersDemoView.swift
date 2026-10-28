@@ -49,8 +49,7 @@ struct ConcurrentPlayersDemoView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+        DemoScrollContainer(maximumWidth: DemoLayoutMetrics.widePageMaximumWidth) {
                 DemoScreenHeading(
                     eyebrow: "MULTI-INSTANCE",
                     title: "Concurrent players",
@@ -78,10 +77,6 @@ struct ConcurrentPlayersDemoView: View {
                         isFullscreen: $isSecondPlayerFullscreen
                     )
                 }
-            }
-            .demoReadableContent(maximumWidth: 1200)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
         }
         .navigationTitle("Concurrent Players")
         .navigationBarTitleDisplayMode(.inline)
@@ -189,12 +184,10 @@ struct ConcurrentPlayersDemoView: View {
                 controlsVisible: controlsVisible,
                 isActiveSurface: !isFullscreen.wrappedValue
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: DemoLayoutMetrics.cardCornerRadius, style: .continuous))
 
             if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                DemoInlineNotice(errorMessage)
             }
         }
         .demoCardSurface()

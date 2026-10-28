@@ -25,14 +25,14 @@ final class ManagedPlayerDemoSession: ObservableObject {
         routeTransitionState == .stable
     }
 
-    var playerEntryStatusTitle: String {
+    var playerEntryStatusLabel: String {
         switch routeTransitionState {
         case .stable:
-            "Managed player"
+            "Ready"
         case .preparing:
-            "Preparing player…"
+            "Opening"
         case .shuttingDown:
-            "Finishing playback…"
+            "Closing"
         }
     }
 

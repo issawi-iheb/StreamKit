@@ -24,31 +24,12 @@ struct FairPlayIntegrationDemoView: View {
     @State private var licenseToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2ZXJzaW9uIjogMSwKImNvbV9rZXlfaWQiOiAiZjM0ZjgzZWMtZTQyNS00OTYzLWExODMtYjRkNDAwYmNlNDQ0IiwKIm1lc3NhZ2UiOiB7CiAgInR5cGUiOiAiZW50aXRsZW1lbnRfbWVzc2FnZSIsCiAgInZlcnNpb24iOiAyLAogICJsaWNlbnNlIjogewogICAgImFsbG93X3BlcnNpc3RlbmNlIjogdHJ1ZQogIH0sCiAgImNvbnRlbnRfa2V5c19zb3VyY2UiOiB7CiAgICAiaW5saW5lIjogWwogICAgICB7CiAgICAgICAgImlkIjogIjQwNjBhODY1LTg4NzgtNDI2Ny05Y2JmLTkxYWU1YmFlMWU3MiIsCiAgICAgICAgImVuY3J5cHRlZF9rZXkiOiAieE5LNVNvRzRseGdHbGpRY2ZMOVRXQT09IiwKICAgICAgICAiaXYiOiAiTkJOYUpPcGI3MnNTYzBkSXFJejJQdz09IiwKICAgICAgICAidXNhZ2VfcG9saWN5IjogIlBvbGljeSBBIgogICAgICB9CiAgICBdCiAgfSwKICAiY29udGVudF9rZXlfdXNhZ2VfcG9saWNpZXMiOiBbCiAgICB7CiAgICAgICJuYW1lIjogIlBvbGljeSBBIiwKICAgICAgInBsYXlyZWFkeSI6IHsKICAgICAgICAibWluX2RldmljZV9zZWN1cml0eV9sZXZlbCI6IDE1MCwKICAgICAgICAicGxheV9lbmFibGVycyI6IFsKICAgICAgICAgICI3ODY2MjdEOC1DMkE2LTQ0QkUtOEY4OC0wOEFFMjU1QjAxQTciCiAgICAgICAgXQogICAgICB9CiAgICB9CiAgXQp9fQ.3Ti5rkzgw77GOXIpZWqNBUX16DXvph_NiJPCejrDStA"
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+        DemoScrollContainer {
                 DemoScreenHeading(
                     eyebrow: "DIGITAL RIGHTS",
                     title: "FairPlay Streaming",
                     subtitle: "Test Axinom’s protected HLS stream on a physical iPhone or iPad with a fresh, short-lived license token."
                 )
-
-                DemoPlayerView(
-                    controller: controller,
-                    snapshot: snapshot,
-                    trackState: trackState,
-                    isFullscreen: false,
-                    onFullscreen: { isFullscreen = true },
-                    controlsVisible: $controlsVisible,
-                    isActiveSurface: !isFullscreen
-                )
-
-                DemoPanel("Playback status", symbol: "play.circle") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        LabeledContent("Phase", value: String(describing: snapshot.phase))
-                        LabeledContent("Intent", value: String(describing: snapshot.intent))
-                    }
-                    .font(.footnote)
-                }
 
                 DemoPanel("FairPlay configuration", symbol: "key.horizontal") {
                     VStack(alignment: .leading, spacing: 12) {
@@ -78,17 +59,33 @@ struct FairPlayIntegrationDemoView: View {
                                     .frame(maxWidth: .infinity)
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .demoPrimaryActionButtonStyle()
                         .disabled(isLoading || !canLoad)
                         .accessibilityIdentifier("fairPlayLoadProtectedStream")
 
                         if let errorMessage {
-                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.red)
+                            DemoInlineNotice(errorMessage)
                                 .accessibilityIdentifier("fairPlayLiveError")
                         }
                     }
+                }
+
+                DemoPlayerView(
+                    controller: controller,
+                    snapshot: snapshot,
+                    trackState: trackState,
+                    isFullscreen: false,
+                    onFullscreen: { isFullscreen = true },
+                    controlsVisible: $controlsVisible,
+                    isActiveSurface: !isFullscreen
+                )
+
+                DemoPanel("Playback status", symbol: "play.circle") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        LabeledContent("Phase", value: String(describing: snapshot.phase))
+                        LabeledContent("Intent", value: String(describing: snapshot.intent))
+                    }
+                    .font(.footnote)
                 }
 
                 if diagnostics.latestMessage != nil {
@@ -98,6 +95,8 @@ struct FairPlayIntegrationDemoView: View {
                                 .font(.footnote.monospaced())
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .lineLimit(12)
+                                .frame(maxHeight: 220, alignment: .topLeading)
                                 .accessibilityIdentifier("fairPlayRequestDiagnostics")
 
                             Button {
@@ -132,10 +131,6 @@ struct FairPlayIntegrationDemoView: View {
                     .font(.footnote)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }
-            .demoReadableContent(maximumWidth: 920)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
         }
         .navigationTitle("Axinom FairPlay Test")
         .navigationBarTitleDisplayMode(.inline)
