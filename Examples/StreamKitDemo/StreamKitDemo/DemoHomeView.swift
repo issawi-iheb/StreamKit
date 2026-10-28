@@ -265,7 +265,7 @@ struct DemoHomeView: View {
 
                     Spacer(minLength: 32)
 
-                    Text(managedPlayerSession.isPreparingPlayer ? "Preparing player…" : "Managed player")
+                    Text(managedPlayerSession.playerEntryStatusTitle)
                         .font(.system(.title2, design: .rounded, weight: .bold))
                         .foregroundStyle(.white)
 
@@ -287,7 +287,7 @@ struct DemoHomeView: View {
             .shadow(color: Color(red: 0.02, green: 0.12, blue: 0.2).opacity(0.2), radius: 22, x: 0, y: 12)
         }
         .buttonStyle(.plain)
-        .disabled(managedPlayerSession.isPreparingPlayer)
+        .disabled(!managedPlayerSession.canOpenPlayer)
         .accessibilityHint("Opens the managed AVKit player demonstration")
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("demo.managed-player")

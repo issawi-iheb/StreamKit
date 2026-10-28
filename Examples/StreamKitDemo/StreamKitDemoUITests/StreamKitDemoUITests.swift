@@ -222,6 +222,49 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testManagedPlayerCanBeReopenedAfterLeavingItsRoute() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let managedPlayerEntry = app.buttons["demo.managed-player"]
+        XCTAssertTrue(managedPlayerEntry.waitForExistence(timeout: 5))
+        managedPlayerEntry.tap()
+
+        XCTAssertTrue(app.navigationBars["Managed Player"].waitForExistence(timeout: 5))
+        let playerSurface = app.otherElements["Video"]
+        XCTAssertTrue(playerSurface.waitForExistence(timeout: 10), app.debugDescription)
+        playerSurface.tap()
+        let transportButton = app.buttons["Play/Pause"]
+        XCTAssertTrue(transportButton.waitForExistence(timeout: 10), app.debugDescription)
+        if transportButton.label == "Play" {
+            transportButton.tap()
+        }
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 20), app.debugDescription)
+
+        app.buttons["managed.back-to-menu"].tap()
+        XCTAssertTrue(managedPlayerEntry.waitForExistence(timeout: 10))
+
+        let readyToReopen = NSPredicate(format: "isEnabled == true")
+        expectation(for: readyToReopen, evaluatedWith: managedPlayerEntry)
+        waitForExpectations(timeout: 10)
+        managedPlayerEntry.tap()
+
+        XCTAssertTrue(app.navigationBars["Managed Player"].waitForExistence(timeout: 10))
+        let reopenedPlayerSurface = app.otherElements["Video"]
+        XCTAssertTrue(reopenedPlayerSurface.waitForExistence(timeout: 10), app.debugDescription)
+        reopenedPlayerSurface.tap()
+        let reopenedTransportButton = app.buttons["Play/Pause"]
+        XCTAssertTrue(reopenedTransportButton.waitForExistence(timeout: 10), app.debugDescription)
+        if reopenedTransportButton.label == "Play" {
+            reopenedTransportButton.tap()
+        }
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 20), app.debugDescription)
+
+        app.buttons["managed.back-to-menu"].tap()
+        XCTAssertTrue(managedPlayerEntry.waitForExistence(timeout: 10))
+    }
+
+    @MainActor
     func testLiveDVRDemoStartsWithPublicLiveSample() throws {
         let app = XCUIApplication()
         app.launch()

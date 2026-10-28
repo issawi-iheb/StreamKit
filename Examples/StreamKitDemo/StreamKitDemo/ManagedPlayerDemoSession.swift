@@ -6,46 +6,52 @@ import SwiftUI
 /// for Picture in Picture.
 @MainActor
 final class ManagedPlayerDemoSession: ObservableObject {
+    private enum RouteTransitionState {
+        case stable
+        case preparing
+        case shuttingDown
+    }
+
+    typealias AudioSessionConfigurer = @MainActor () async throws -> Void
+    typealias SessionFactory = @MainActor (DemoPlayerRouteRestorationCoordinator) -> StreamPlayerSession
+    typealias SessionShutdown = @MainActor (StreamPlayerSession) async throws -> Void
+
     @Published private(set) var playerSession: StreamPlayerSession?
     @Published var isPlayerPresented = false
     @Published private(set) var errorMessage: String?
-    @Published private(set) var isPreparingPlayer = false
+    @Published private var routeTransitionState: RouteTransitionState = .stable
 
-    private let restorationCoordinator = DemoPlayerRouteRestorationCoordinator()
-    private var pictureInPictureObservation: AnyCancellable?
+    var canOpenPlayer: Bool {
+        routeTransitionState == .stable
+    }
 
-    init() {
-        restorationCoordinator.requestPlayerRoute = { [weak self] in
-            guard let self, self.playerSession != nil else { return }
-            self.isPlayerPresented = true
+    var playerEntryStatusTitle: String {
+        switch routeTransitionState {
+        case .stable:
+            "Managed player"
+        case .preparing:
+            "Preparing player…"
+        case .shuttingDown:
+            "Finishing playback…"
         }
     }
 
-    func startPlayerRoute() {
-        if playerSession != nil {
-            isPlayerPresented = true
-            return
-        }
-        guard !isPreparingPlayer else { return }
+    private let restorationCoordinator = DemoPlayerRouteRestorationCoordinator()
+    private var pictureInPictureObservation: AnyCancellable?
+    private let configureAudioSession: AudioSessionConfigurer
+    private let makePlayerSession: SessionFactory
+    private let shutdownPlayerSession: SessionShutdown
 
-        isPreparingPlayer = true
-        errorMessage = nil
-        Task { @MainActor in
-            defer { isPreparingPlayer = false }
-
-            do {
-                try await DemoPlaybackAudioSession.configureAndActivate()
-            } catch {
-                errorMessage = error.localizedDescription
-                return
-            }
-
+    init(
+        configureAudioSession: @escaping AudioSessionConfigurer = {
+            try await DemoPlaybackAudioSession.configureAndActivate()
+        },
+        makePlayerSession: @escaping SessionFactory = { restorationCoordinator in
             let source = MediaSource(
                 url: URL(string: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")!,
                 presentationKind: .onDemand
             )
-            let restorationCoordinator = self.restorationCoordinator
-            let session = StreamPlayerSession(
+            return StreamPlayerSession(
                 source: source,
                 configuration: PlayerConfiguration(autoplay: true),
                 automaticallyStartsPictureInPictureWhenLeavingApp: true,
@@ -53,6 +59,46 @@ final class ManagedPlayerDemoSession: ObservableObject {
                     restorationCoordinator.restorePlayerInterface(completion)
                 }
             )
+        },
+        shutdownPlayerSession: @escaping SessionShutdown = { session in
+            try await session.shutdown()
+        }
+    ) {
+        self.configureAudioSession = configureAudioSession
+        self.makePlayerSession = makePlayerSession
+        self.shutdownPlayerSession = shutdownPlayerSession
+
+        restorationCoordinator.requestPlayerRoute = { [weak self] in
+            guard let self, self.playerSession != nil else { return }
+            self.isPlayerPresented = true
+        }
+    }
+
+    func startPlayerRoute() {
+        guard canOpenPlayer else { return }
+
+        if playerSession != nil {
+            isPlayerPresented = true
+            return
+        }
+
+        routeTransitionState = .preparing
+        errorMessage = nil
+        Task { @MainActor in
+            defer {
+                if routeTransitionState == .preparing {
+                    routeTransitionState = .stable
+                }
+            }
+
+            do {
+                try await configureAudioSession()
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
+
+            let session = makePlayerSession(restorationCoordinator)
             playerSession = session
             observePictureInPictureState(from: session)
             isPlayerPresented = true
@@ -98,13 +144,22 @@ final class ManagedPlayerDemoSession: ObservableObject {
         _ session: StreamPlayerSession
     ) {
         guard !isPlayerPresented,
-              session.pictureInPictureState == .idle,
+              session.presentationController.state == .idle,
+              routeTransitionState != .shuttingDown,
               playerSession === session else { return }
 
+        routeTransitionState = .shuttingDown
         playerSession = nil
         pictureInPictureObservation = nil
         Task { @MainActor in
-            try? await session.shutdown()
+            defer { routeTransitionState = .stable }
+            do {
+                try await shutdownPlayerSession(session)
+            } catch {
+                errorMessage = error.localizedDescription
+                playerSession = session
+                observePictureInPictureState(from: session)
+            }
         }
     }
 }

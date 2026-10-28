@@ -100,6 +100,59 @@ struct StreamKitDemoTests {
         #expect(session.pictureInPictureController === pipController)
     }
 
+    @MainActor
+    @Test("Managed player cannot create a new session until the old session shuts down")
+    func managedPlayerWaitsForShutdownBeforeReopening() async {
+        let shutdownGate = AsyncShutdownGate()
+        var createdSessionCount = 0
+        var shutdownStarted = false
+
+        let owner = ManagedPlayerDemoSession(
+            configureAudioSession: {},
+            makePlayerSession: { restorationCoordinator in
+                createdSessionCount += 1
+                return StreamPlayerSession(
+                    source: MediaSource(
+                        url: URL(fileURLWithPath: "/tmp/streamkit-managed-session-\(createdSessionCount).mp4")
+                    ),
+                    configuration: PlayerConfiguration(autoplay: false),
+                    restorationHandler: { completion in
+                        restorationCoordinator.restorePlayerInterface(completion)
+                    }
+                )
+            },
+            shutdownPlayerSession: { session in
+                shutdownStarted = true
+                await shutdownGate.wait()
+                try await session.shutdown()
+            }
+        )
+
+        owner.startPlayerRoute()
+        #expect(await waitUntil { owner.isPlayerPresented })
+        #expect(createdSessionCount == 1)
+
+        owner.isPlayerPresented = false
+        owner.playerRouteDidClose()
+        #expect(await waitUntil { shutdownStarted })
+        #expect(!owner.canOpenPlayer)
+
+        owner.startPlayerRoute()
+        #expect(createdSessionCount == 1)
+        #expect(!owner.isPlayerPresented)
+
+        shutdownGate.open()
+        #expect(await waitUntil { owner.canOpenPlayer })
+
+        owner.startPlayerRoute()
+        #expect(await waitUntil { owner.isPlayerPresented })
+        #expect(createdSessionCount == 2)
+
+        owner.isPlayerPresented = false
+        owner.playerRouteDidClose()
+        #expect(await waitUntil { owner.canOpenPlayer })
+    }
+
 }
 
 private final class RestorationCompletionRecorder: @unchecked Sendable {
@@ -117,4 +170,35 @@ private final class RestorationCompletionRecorder: @unchecked Sendable {
         defer { lock.unlock() }
         storedValue = value
     }
+}
+
+@MainActor
+private final class AsyncShutdownGate {
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func open() {
+        isOpen = true
+        let pendingWaiters = waiters
+        waiters.removeAll()
+        pendingWaiters.forEach { $0.resume() }
+    }
+}
+
+@MainActor
+private func waitUntil(
+    _ condition: @MainActor () -> Bool
+) async -> Bool {
+    for _ in 0..<100 {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
 }
