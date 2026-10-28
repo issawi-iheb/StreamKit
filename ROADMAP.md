@@ -14,6 +14,28 @@ separate integration boundaries for DRM and advertising.
 - **Planned**: Work not started
 - **Not assessed**: Implementation/behavior not sufficiently inspected
 
+## NEXT EVOLUTION TARGET — Reliability and developer observability
+
+**Objective:** make the current AVFoundation-based iOS player dependable and diagnosable across its supported integration paths before expanding its feature surface.
+
+### Scope
+- Complete the shared diagnostics experience on Live/DVR, audio, bearer-authenticated playback, and multiple-player demos. Preserve controller identity in multi-player event histories.
+- Verify the iOS 18 minimum and current supported OS behavior in CI and on devices, including source replacement/cancellation, audio interruptions/focus, and AVKit/custom PiP restoration.
+- Validate bearer-authenticated HLS against a controlled origin, including child resources, byte ranges, redirects, token refresh, and cancellation; validate FairPlay renewal, expiry/failure, and source replacement with provider materials.
+- Exercise AVMetrics on a physical iOS 18+ device and document which normalized metrics are available and how consumers should interpret them.
+- Establish API compatibility, versioning, and release expectations before describing the SDK as production-ready.
+
+### Exit criteria
+- CI covers the package minimum and current supported simulator runtime; device-only PiP, audio, and FairPlay results are explicitly recorded.
+- Each demo route that exposes diagnostics clearly identifies the player instance and explains bounded, best-effort delivery.
+- Controlled-origin authentication and provider-backed FairPlay scenarios have documented results, including cancellation and failure paths.
+- Public API stability and supported capability boundaries are documented.
+
+### Deferred product decisions
+- Ads: choose HLS interstitial support, client-side ad integrations, or both before defining the public ad API.
+- Offline playback: scope downloads, storage policy, persistent FairPlay keys, and renewal together; do not treat offline keys as a small extension to online FairPlay.
+- Playlists, cross-platform backends, and vendor analytics integrations remain separate proposals until product requirements justify them.
+
 ## PHASE 1 — Core stabilization and production readiness
 
 ### COMPLETED IMPLEMENTATION:
@@ -144,8 +166,8 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Latest code baseline**: `23fede9` (`Polish demo player visual consistency`) on `engineplayer-refactoring`. This identifies the code baseline rather than any later documentation-only commit.
+- **Latest repository commit**: `9957a6b` (`Document demo routes and architecture visuals`) on `main`. The latest code implementation baseline is `23fede9` (`Polish demo player visual consistency`).
 - **Current phase**: Phase 3 — normalized lifecycle diagnostics and iOS 18+ AVMetrics enrichment are implemented. Analytics-provider integrations remain deferred. Shared diagnostics UI is available on managed, custom-controls, and AVKit/PiP routes; FairPlay has its own request report. Additional example routes remain to be wired. Phase 1 production-readiness and Phase 2 provider-specific acceptance gaps remain open.
 - **Latest local verification (2026-10-28)**: The StreamKit demo builds for the generic iOS Simulator destination. CoreSimulator was unavailable for runtime visual inspection in the latest pass; no new screenshot or device verification is claimed here.
 - **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes the 2026-10-19 full SDK reassessment and the 2026-10-20 architecture and SDK comparison. StreamKit is not yet production-ready against Phase 1 criteria.
-- **Next milestone**: Extend the shared diagnostics UI to the remaining applicable demo routes, then exercise AVMetrics request and summary reporting on a physical iOS 18+ device. Also review the legacy FairPlay callback's error-domain compatibility/privacy contract and verify the package's iOS 18 minimum in CI. Phase 1 device, CI, and protected-origin verification gaps remain open.
+- **Next milestone**: Complete the Reliability and developer observability target above. Ads and offline playback remain product decisions, not assumed feature-parity commitments.
