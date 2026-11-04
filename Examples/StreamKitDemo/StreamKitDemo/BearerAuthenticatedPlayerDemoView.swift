@@ -83,6 +83,8 @@ struct BearerAuthenticatedPlayerDemoView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+
+                PlaybackDiagnosticsPanel(controller: controller)
         }
         .navigationTitle("Bearer Authentication")
         .navigationBarTitleDisplayMode(.inline)

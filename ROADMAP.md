@@ -74,7 +74,7 @@ separate integration boundaries for DRM and advertising.
 - **Implemented** — Public `StreamAVPlayerView` presents the same controller through `AVPlayerViewController` with system playback/PiP/AirPlay controls and opt-in automatic PiP. The demo has a separate AVKit/PiP entry, configures playback audio, and requests landscape for custom fullscreen. PiP and fullscreen flows were user-verified on a physical device; broader device and OS acceptance remains open.
 
 ### NEXT:
-- Add the shared diagnostics entry point to Live/DVR, audio, bearer, and multiple-player examples. For multiple players, keep each controller's event history identifiable so events cannot be mistaken for the other instance.
+- **Implemented; build/UI validation pending** — Added shared diagnostics to Live/DVR, audio, bearer-authenticated playback, and both concurrent-player cards. Each concurrent-player history is labeled with its controller identity.
 - Exercise AVMetrics request and playback-summary reporting on a physical iOS 18+ device, then record which metrics are available for the supported stream types.
 - When protected-stream test materials are available, verify bearer authentication against a controlled HTTPS HLS origin: master and child playlists, segments, keys, ranges, redirects, token refresh, and cancellation on iOS. Public samples do not provide reusable bearer-protected media.
 - Validate failure mappings against representative real AVFoundation failures and refine unmapped cases.

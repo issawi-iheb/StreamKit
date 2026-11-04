@@ -113,6 +113,8 @@ struct LiveDVRDemoView: View {
                 }
                 .accessibilityIdentifier("liveDVRTimeline")
 
+                PlaybackDiagnosticsPanel(controller: controller)
+
                 if let errorMessage {
                     DemoInlineNotice(errorMessage)
                 }

@@ -186,6 +186,8 @@ struct ConcurrentPlayersDemoView: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: DemoLayoutMetrics.cardCornerRadius, style: .continuous))
 
+            PlaybackDiagnosticsPanel(controller: controller, playerName: title)
+
             if let errorMessage {
                 DemoInlineNotice(errorMessage)
             }

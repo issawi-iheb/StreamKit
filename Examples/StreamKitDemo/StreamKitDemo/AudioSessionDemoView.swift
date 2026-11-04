@@ -84,6 +84,8 @@ struct AudioSessionDemoView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
+                PlaybackDiagnosticsPanel(controller: controller)
+
                 if let errorMessage {
                     DemoInlineNotice(errorMessage)
                 }

@@ -5,12 +5,13 @@ import SwiftUI
 @MainActor
 struct PlaybackDiagnosticsPanel: View {
     let controller: StreamPlayerController
+    var playerName: String? = nil
 
     @State private var isPresented = false
 
     var body: some View {
         HStack(spacing: 12) {
-            Label("Playback diagnostics", systemImage: "waveform.path.ecg")
+            Label(title, systemImage: "waveform.path.ecg")
                 .font(.subheadline.weight(.semibold))
 
             Spacer(minLength: 8)
@@ -22,8 +23,8 @@ struct PlaybackDiagnosticsPanel: View {
             }
             .buttonStyle(.bordered)
             .tint(DemoPalette.accent)
-            .accessibilityLabel("View playback diagnostics")
-            .accessibilityIdentifier("playback-diagnostics-button")
+            .accessibilityLabel(playerName.map { "View \($0) playback diagnostics" } ?? "View playback diagnostics")
+            .accessibilityIdentifier(accessibilityIdentifier)
         }
         .padding(12)
         .background(
@@ -35,14 +36,24 @@ struct PlaybackDiagnosticsPanel: View {
                 .strokeBorder(.primary.opacity(0.045), lineWidth: 1)
         }
         .sheet(isPresented: $isPresented) {
-            PlaybackDiagnosticsSheet(controller: controller)
+            PlaybackDiagnosticsSheet(controller: controller, playerName: playerName)
         }
+    }
+
+    private var title: String {
+        playerName.map { "\($0) diagnostics" } ?? "Playback diagnostics"
+    }
+
+    private var accessibilityIdentifier: String {
+        playerName.map { "playback-diagnostics-button-\($0.lowercased().replacingOccurrences(of: " ", with: "-"))" }
+            ?? "playback-diagnostics-button"
     }
 }
 
 @MainActor
 private struct PlaybackDiagnosticsSheet: View {
     let controller: StreamPlayerController
+    let playerName: String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var diagnosticEvents: [PlaybackDiagnosticEvent] = []
@@ -62,7 +73,13 @@ private struct PlaybackDiagnosticsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Playback events") {
+                Section(playerName.map { "\($0) playback events" } ?? "Playback events") {
+                    if let playerName {
+                        Text("This history belongs to \(playerName). Its event sequence is scoped to this player.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
                     if entries.isEmpty {
                         ContentUnavailableView(
                             "No playback events yet",
@@ -90,7 +107,7 @@ private struct PlaybackDiagnosticsSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("Playback Diagnostics")
+            .navigationTitle(playerName.map { "\($0) Diagnostics" } ?? "Playback Diagnostics")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
