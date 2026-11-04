@@ -46,7 +46,8 @@ extension AVFoundationPlaybackEngine {
                         generation: sourceGeneration
                     )
                 }
-            }
+            },
+            urlProtocolClassesForTesting: urlProtocolClassesForTesting
         )
         authenticatedResourceLoader = preparedItem.authenticatedResourceLoader
         fairPlayContentKeySession = preparedItem.fairPlayContentKeySession

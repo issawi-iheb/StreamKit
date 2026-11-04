@@ -20,7 +20,8 @@ enum AVFoundationPlaybackItemFactory {
 
     static func make(
         from source: MediaSource,
-        fairPlayDiagnosticHandler: ((FairPlayKeySessionDiagnostic) -> Void)? = nil
+        fairPlayDiagnosticHandler: ((FairPlayKeySessionDiagnostic) -> Void)? = nil,
+        urlProtocolClassesForTesting: [AnyClass]? = nil
     ) throws -> PreparedPlaybackItem {
         let request = source.requestConfiguration
 
@@ -75,7 +76,8 @@ enum AVFoundationPlaybackItemFactory {
             let loader = AuthenticatedMediaResourceLoader(
                 authentication: authentication,
                 cookies: request.cookies,
-                userAgent: request.userAgent
+                userAgent: request.userAgent,
+                urlProtocolClassesForTesting: urlProtocolClassesForTesting
             )
             resourceLoader = loader
         } else {

@@ -141,10 +141,12 @@ final class AuthenticatedMediaResourceLoader: NSObject,
     private let sessionDelegate: AuthenticatedMediaSessionDelegate
     private var tasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
+    // Integration tests replace HTTPS transport without relaxing loader policy.
     init(
         authentication: MediaBearerAuthentication,
         cookies: [MediaCookie],
-        userAgent: String?
+        userAgent: String?,
+        urlProtocolClassesForTesting: [AnyClass]? = nil
     ) {
         self.authentication = authentication
         self.cookies = cookies
@@ -155,17 +157,23 @@ final class AuthenticatedMediaResourceLoader: NSObject,
             userAgent: userAgent
         )
         self.session = URLSession(
-            configuration: Self.makeSessionConfiguration(),
+            configuration: Self.makeSessionConfiguration(
+                urlProtocolClassesForTesting: urlProtocolClassesForTesting
+            ),
             delegate: sessionDelegate,
             delegateQueue: nil
         )
         super.init()
     }
 
-    static func makeSessionConfiguration() -> URLSessionConfiguration {
+    // Production passes nil to retain URLSession's native protocol handling.
+    static func makeSessionConfiguration(
+        urlProtocolClassesForTesting: [AnyClass]? = nil
+    ) -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
         configuration.httpShouldSetCookies = false
+        configuration.protocolClasses = urlProtocolClassesForTesting
         return configuration
     }
 
