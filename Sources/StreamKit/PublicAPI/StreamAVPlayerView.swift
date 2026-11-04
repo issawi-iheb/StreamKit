@@ -28,6 +28,7 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
 
     private weak var playbackController: StreamPlayerController?
     private weak var pendingPlaybackController: StreamPlayerController?
+    private var playbackStateTask: Task<Void, Never>?
     private let isApplicationInBackground: @MainActor () -> Bool
     private var stopRequestedByHost = false
 
@@ -53,6 +54,7 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
     func bind(to controller: StreamPlayerController) {
         guard playbackController !== controller else {
             pendingPlaybackController = nil
+            applyAdNavigationPolicy(controller.snapshot.adBreak)
             return
         }
 
@@ -62,6 +64,7 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
         }
 
         playbackController = controller
+        observePlaybackState(from: controller)
     }
 
     /// Waits until AVKit reports that PiP has stopped or failed to start.
@@ -103,6 +106,7 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
         mountedViewController = viewController
         retainedViewController = viewController
         viewController.delegate = self
+        applyAdNavigationPolicy(playbackController?.snapshot.adBreak)
     }
 
     fileprivate func detach(_ viewController: AVPlayerViewController) {
@@ -116,6 +120,25 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
             viewController.delegate = nil
             retainedViewController = nil
         }
+    }
+
+    private func observePlaybackState(from controller: StreamPlayerController) {
+        playbackStateTask?.cancel()
+        let snapshots = controller.snapshots
+        playbackStateTask = Task { @MainActor [weak self, weak controller] in
+            for await snapshot in snapshots {
+                guard let self, let controller,
+                      self.playbackController === controller else {
+                    break
+                }
+                self.applyAdNavigationPolicy(snapshot.adBreak)
+            }
+        }
+    }
+
+    private func applyAdNavigationPolicy(_ adBreak: PlaybackAdBreakState?) {
+        let viewController = retainedViewController ?? mountedViewController
+        viewController?.requiresLinearPlayback = adBreak?.restrictsForwardSeeking == true
     }
 }
 
@@ -206,8 +229,8 @@ extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
         }
 
         if let pendingPlaybackController {
-            playbackController = pendingPlaybackController
             self.pendingPlaybackController = nil
+            bind(to: pendingPlaybackController)
         }
 
         if mountedViewController !== viewController {

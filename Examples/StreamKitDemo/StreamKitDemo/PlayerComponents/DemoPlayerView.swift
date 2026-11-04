@@ -305,6 +305,16 @@ struct DemoPlayerView: View {
                     .padding(.leading, 4)
             }
 
+            if snapshot.adBreak != nil {
+                Text("AD")
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1.2)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.18), in: Capsule())
+                    .accessibilityLabel("Advertisement playback")
+            }
+
             Spacer()
         }
     }
@@ -412,6 +422,7 @@ struct DemoPlayerView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(snapshot.adBreak?.requiresPreferredPlaybackRate == true)
         .accessibilityLabel("Playback speed")
         .accessibilityValue(playbackRateLabel(playbackRate))
         .accessibilityHint("Choose a playback speed")
@@ -512,7 +523,8 @@ struct DemoPlayerView: View {
         .accessibilityLabel(label)
         .disabled(
             snapshot.phase == .idle ||
-            snapshot.phase == .loading
+            snapshot.phase == .loading ||
+            (seconds > 0 && snapshot.adBreak?.restrictsForwardSeeking == true)
         )
     }
 
@@ -579,7 +591,8 @@ struct DemoPlayerView: View {
                 .disabled(
                     snapshot.duration == nil ||
                     snapshot.phase == .idle ||
-                    snapshot.phase == .loading
+                    snapshot.phase == .loading ||
+                    snapshot.adBreak?.restrictsForwardSeeking == true
                 )
                 .accessibilityLabel("Playback position")
 

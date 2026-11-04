@@ -47,6 +47,9 @@ enum PlaybackEngineEvent: Sendable {
     /// The error domain and localized description are deliberately omitted.
     case fairPlayContentKeyRequestFailed(errorCode: Int)
 
+    /// The active ad break changed.
+    case adBreakChanged(PlaybackAdBreakState?)
+
     /// A normalized AVFoundation playback metric.
     case metric(date: Date, kind: PlaybackMetricEvent.Kind)
 }

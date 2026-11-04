@@ -8,6 +8,7 @@ public struct PlaybackFailure: LocalizedError, Equatable, Sendable {
         case unsupportedConfiguration
         case authentication
         case invalidPlaybackRate
+        case adPlaybackRestricted
         case unsupportedFormat
         case network
         case playback

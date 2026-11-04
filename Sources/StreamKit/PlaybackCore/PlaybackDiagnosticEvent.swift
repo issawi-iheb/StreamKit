@@ -19,6 +19,9 @@ public struct PlaybackDiagnosticEvent: Equatable, Sendable {
         case audioInterruptionEnded(systemAllowsResume: Bool, resumeRequested: Bool)
         case fairPlayContentKeyResponseAccepted
         case fairPlayContentKeyRequestFailed(errorCode: Int)
+        case adBreakBegan(PlaybackAdDeliveryMode)
+        case adBreakEnded(PlaybackAdDeliveryMode)
+        case adBreakInterrupted(PlaybackAdDeliveryMode)
     }
 
     /// Why the active source load was cancelled.

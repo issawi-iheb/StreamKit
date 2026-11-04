@@ -21,13 +21,17 @@ public struct PlaybackSnapshot: Equatable, Sendable {
     /// The failure associated with the current playback state, if any.
     public let failure: PlaybackFailure?
 
+    /// The ad break currently using the player's output, if any.
+    public let adBreak: PlaybackAdBreakState?
+
     public init(
         phase: PlaybackPhase,
         intent: PlaybackIntent,
         currentTime: TimeInterval = 0,
         duration: TimeInterval? = nil,
         failure: PlaybackFailure? = nil,
-        timeline: PlaybackTimeline = .init()
+        timeline: PlaybackTimeline = .init(),
+        adBreak: PlaybackAdBreakState? = nil
     ) {
         self.phase = phase
         self.intent = intent
@@ -35,5 +39,18 @@ public struct PlaybackSnapshot: Equatable, Sendable {
         self.duration = duration
         self.failure = failure
         self.timeline = timeline
+        self.adBreak = adBreak
+    }
+
+    func settingAdBreak(_ adBreak: PlaybackAdBreakState?) -> PlaybackSnapshot {
+        PlaybackSnapshot(
+            phase: phase,
+            intent: intent,
+            currentTime: currentTime,
+            duration: duration,
+            failure: failure,
+            timeline: timeline,
+            adBreak: adBreak
+        )
     }
 }

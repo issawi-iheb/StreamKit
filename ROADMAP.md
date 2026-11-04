@@ -31,8 +31,8 @@ separate integration boundaries for DRM and advertising.
 - Controlled-origin authentication and provider-backed FairPlay scenarios have documented results, including cancellation and failure paths.
 - Public API stability and supported capability boundaries are documented.
 
-### Deferred product decisions
-- Ads: choose HLS interstitial support, client-side ad integrations, or both before defining the public ad API.
+### Product decisions and deferred capabilities
+- Ads: both HLS interstitials and client-side ads are in scope across managed, advanced, and AVKit paths. See [Advertising Integration Plan](Documentation/AdvertisingPlan.md); select the client-side provider before defining its public adapter API.
 - Offline playback: scope downloads, storage policy, persistent FairPlay keys, and renewal together; do not treat offline keys as a small extension to online FairPlay.
 - Playlists, cross-platform backends, and vendor analytics integrations remain separate proposals until product requirements justify them.
 
@@ -124,7 +124,8 @@ separate integration boundaries for DRM and advertising.
 ## PHASE 4 — Advertising
 
 ### ACCEPTANCE CRITERIA:
-- Modular CSAI and SSAI integration boundaries defined
+- Ad playback works through the managed, advanced (`StreamPlayerController` + `StreamVideoView`), and AVKit (`StreamAVPlayerView`) paths.
+- HLS interstitial and client-side ad integration boundaries defined
 - Ad playback events and transitions modeled
 - Seeking restrictions and ad-break behavior defined
 - Provider integrations implemented and tested

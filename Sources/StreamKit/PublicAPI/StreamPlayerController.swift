@@ -75,6 +75,8 @@ public final class StreamPlayerController {
 
     /// Identifies the current source-loading operation.
     var loadGeneration: UInt64 = 0
+    /// Source generation that produced the active ad break, used for lifecycle diagnostics.
+    var activeAdBreakLoadGeneration: UInt64?
     /// Orders app playback commands across async engine calls.
     var playbackCommandGeneration: UInt64 = 0
     /// Prevents an older seek from committing after a newer seek completes.

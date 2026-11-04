@@ -182,6 +182,12 @@ private struct Entry: Identifiable {
             "FairPlay content-key response accepted"
         case let .fairPlayContentKeyRequestFailed(errorCode):
             "FairPlay content-key request failed (code \(errorCode))"
+        case let .adBreakBegan(deliveryMode):
+            "Ad break began (\(deliveryMode))"
+        case let .adBreakEnded(deliveryMode):
+            "Ad break ended (\(deliveryMode))"
+        case let .adBreakInterrupted(deliveryMode):
+            "Ad break interrupted (\(deliveryMode))"
         }
     }
 

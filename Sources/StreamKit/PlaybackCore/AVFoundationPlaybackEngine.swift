@@ -36,6 +36,11 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     var timeObserverToken: Any?
     var itemEndObserver: NSObjectProtocol?
     var itemFailureObserver: NSObjectProtocol?
+    var interstitialMonitor: AVPlayerInterstitialEventMonitor?
+    var interstitialCurrentEventObserver: NSObjectProtocol?
+    var activeInterstitialIdentity: ObjectIdentifier?
+    var interstitialSequence: UInt64 = 0
+    var activeAdBreakState: PlaybackAdBreakState?
     var metricsTask: Task<Void, Never>?
     var pausedLiveTimelineTimer: Timer?
 

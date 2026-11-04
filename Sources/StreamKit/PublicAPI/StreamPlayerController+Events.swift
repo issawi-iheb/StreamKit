@@ -135,6 +135,9 @@ extension StreamPlayerController {
         case let .fairPlayContentKeyRequestFailed(errorCode):
             publishDiagnostic(.fairPlayContentKeyRequestFailed(errorCode: errorCode))
             return
+        case let .adBreakChanged(adBreak):
+            updateAdBreak(adBreak)
+            return
         case let .metric(date, kind):
             metricsBroadcaster.publish(
                 timestamp: date,

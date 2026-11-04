@@ -177,6 +177,12 @@ final class FairPlayDemoDiagnostics {
             message = "AVFoundation accepted the FairPlay content-key response"
         case let .fairPlayContentKeyRequestFailed(errorCode):
             message = "FairPlay content-key processing failed (error code \(errorCode))"
+        case let .adBreakBegan(deliveryMode):
+            message = "Ad break began (\(deliveryMode))"
+        case let .adBreakEnded(deliveryMode):
+            message = "Ad break ended (\(deliveryMode))"
+        case let .adBreakInterrupted(deliveryMode):
+            message = "Ad break interrupted (\(deliveryMode))"
         }
 
         return "[\(time)] #\(event.sequence) load \(event.loadGeneration): \(message)"

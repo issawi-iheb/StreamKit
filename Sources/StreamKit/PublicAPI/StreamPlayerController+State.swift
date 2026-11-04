@@ -6,13 +6,29 @@ extension StreamPlayerController {
 // MARK: - Snapshot Updates
 
     func updateSnapshot(
-        _ newSnapshot: PlaybackSnapshot
+        _ requestedSnapshot: PlaybackSnapshot
     ) {
         guard !isShutdown else {
             return
         }
 
         let previousPhase = snapshot.phase
+        // The primary item can reach its end while a post-roll interstitial is still active.
+        // Let the interstitial monitor report the ad's end instead of clearing it here.
+        let clearsAdBreak = [PlaybackPhase.idle, .loading, .failed]
+            .contains(requestedSnapshot.phase)
+        if clearsAdBreak, let activeAdBreak = snapshot.adBreak {
+            publishDiagnostic(
+                .adBreakInterrupted(activeAdBreak.deliveryMode),
+                loadGeneration: activeAdBreakLoadGeneration ?? loadGeneration
+            )
+            activeAdBreakLoadGeneration = nil
+        }
+        let newSnapshot = requestedSnapshot.adBreak == nil
+                && snapshot.adBreak != nil
+                && !clearsAdBreak
+            ? requestedSnapshot.settingAdBreak(snapshot.adBreak)
+            : requestedSnapshot
         snapshot = newSnapshot
         snapshotBroadcaster.publish(newSnapshot)
 
@@ -43,6 +59,27 @@ extension StreamPlayerController {
         }
     }
 
+    func updateAdBreak(_ adBreak: PlaybackAdBreakState?) {
+        let previous = snapshot.adBreak
+        guard previous != adBreak else { return }
+
+        if let previous,
+           previous.sequence != adBreak?.sequence || previous.deliveryMode != adBreak?.deliveryMode {
+            publishDiagnostic(.adBreakEnded(previous.deliveryMode))
+        }
+        if let adBreak,
+           previous?.sequence != adBreak.sequence || previous?.deliveryMode != adBreak.deliveryMode {
+            publishDiagnostic(.adBreakBegan(adBreak.deliveryMode))
+        }
+
+        if previous != adBreak {
+            activeAdBreakLoadGeneration = adBreak == nil ? nil : loadGeneration
+        }
+
+        snapshot = snapshot.settingAdBreak(adBreak)
+        snapshotBroadcaster.publish(snapshot)
+    }
+
     func updateIntent(
         _ intent: PlaybackIntent
     ) {
@@ -53,7 +90,8 @@ extension StreamPlayerController {
                 currentTime: snapshot.currentTime,
                 duration: snapshot.duration,
                 failure: snapshot.failure,
-                timeline: snapshot.timeline
+                timeline: snapshot.timeline,
+                adBreak: snapshot.adBreak
             )
         )
     }
@@ -68,7 +106,8 @@ extension StreamPlayerController {
                 currentTime: snapshot.currentTime,
                 duration: snapshot.duration,
                 failure: snapshot.failure,
-                timeline: snapshot.timeline
+                timeline: snapshot.timeline,
+                adBreak: snapshot.adBreak
             )
         )
     }
@@ -118,7 +157,8 @@ extension StreamPlayerController {
                             currentTime: snapshot.currentTime,
                             duration: snapshot.duration,
                             failure: failure,
-                            timeline: snapshot.timeline
+                            timeline: snapshot.timeline,
+                            adBreak: snapshot.adBreak
                         )
                     )
                     appliedPlayback = nil

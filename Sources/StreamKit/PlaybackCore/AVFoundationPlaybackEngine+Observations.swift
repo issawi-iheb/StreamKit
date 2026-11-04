@@ -10,6 +10,8 @@ extension AVFoundationPlaybackEngine {
         generation: UInt64,
         presentationKind: MediaPresentationKind
     ) {
+        installInterstitialObserver(for: item, generation: generation)
+
         // Observe AVPlayer playback state.
         timeControlStatusObservation = player.observe(
             \.timeControlStatus,
@@ -110,6 +112,64 @@ extension AVFoundationPlaybackEngine {
                 )
             }
         }
+    }
+
+    private func installInterstitialObserver(
+        for item: AVPlayerItem,
+        generation: UInt64
+    ) {
+        guard #available(iOS 15.0, *) else { return }
+
+        let monitor = AVPlayerInterstitialEventMonitor(primaryPlayer: player)
+        interstitialMonitor = monitor
+        interstitialCurrentEventObserver = NotificationCenter.default.addObserver(
+            forName: AVPlayerInterstitialEventMonitor.currentEventDidChangeNotification,
+            object: monitor,
+            queue: .main
+        ) { [weak self, weak item, weak monitor] _ in
+            Task { @MainActor [weak self, weak item, weak monitor] in
+                guard let self,
+                      let item,
+                      let monitor,
+                      self.interstitialMonitor === monitor,
+                      self.isCurrentItem(item, generation: generation) else {
+                    return
+                }
+
+                self.publishInterstitialState(monitor.currentEvent)
+            }
+        }
+
+        publishInterstitialState(monitor.currentEvent)
+    }
+
+    private func publishInterstitialState(_ event: AVPlayerInterstitialEvent?) {
+        guard let event else {
+            guard activeInterstitialIdentity != nil else { return }
+            activeInterstitialIdentity = nil
+            activeAdBreakState = nil
+            emit(.adBreakChanged(nil))
+            return
+        }
+
+        let identity = ObjectIdentifier(event)
+        guard activeInterstitialIdentity != identity else { return }
+        activeInterstitialIdentity = identity
+        interstitialSequence &+= 1
+
+        let restrictions = event.restrictions
+        let state = PlaybackAdBreakState(
+            deliveryMode: .hlsInterstitial,
+            sequence: interstitialSequence,
+            restrictsForwardSeeking: restrictions.contains(
+                .constrainsSeekingForwardInPrimaryContent
+            ),
+            requiresPreferredPlaybackRate: restrictions.contains(
+                .requiresPlaybackAtPreferredRateForAdvancement
+            )
+        )
+        activeAdBreakState = state
+        emit(.adBreakChanged(state))
     }
 
     private func handleTimeControlStatus(
@@ -260,6 +320,14 @@ extension AVFoundationPlaybackEngine {
             NotificationCenter.default.removeObserver(itemFailureObserver)
             self.itemFailureObserver = nil
         }
+
+        if let interstitialCurrentEventObserver {
+            NotificationCenter.default.removeObserver(interstitialCurrentEventObserver)
+            self.interstitialCurrentEventObserver = nil
+        }
+        interstitialMonitor = nil
+        activeInterstitialIdentity = nil
+        activeAdBreakState = nil
 
         observedItem = nil
     }

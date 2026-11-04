@@ -28,6 +28,17 @@ struct DemoHomeView: View {
 
                     demoSection("Playback examples") {
                         NavigationLink {
+                            HLSInterstitialDemoView()
+                        } label: {
+                            DemoNavigationCard(
+                                title: "HLS interstitial ads",
+                                subtitle: "Load an ad-enabled HLS stream and inspect ad breaks on each player surface.",
+                                symbol: "rectangle.stack.badge.play"
+                            )
+                        }
+                        .accessibilityIdentifier("demo.hls-interstitial-ads")
+
+                        NavigationLink {
                             LiveDVRDemoView()
                         } label: {
                             DemoNavigationCard(

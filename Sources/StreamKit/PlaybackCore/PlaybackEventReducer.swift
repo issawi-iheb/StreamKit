@@ -63,6 +63,7 @@ enum PlaybackEventReducer {
 
         case .fairPlayContentKeyResponseAccepted,
              .fairPlayContentKeyRequestFailed,
+         .adBreakChanged,
              .metric:
             return nil
         }
