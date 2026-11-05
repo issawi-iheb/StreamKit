@@ -2,7 +2,7 @@
 
 **Status:** Both HLS interstitials and client-side ads are in scope for the first advertising release. The client-side provider is still to be selected.
 
-**Implementation:** The shared HLS path observes active interstitials, publishes normalized ad-break state and diagnostics, and enforces active and scheduled forward-seek restrictions. Managed and advanced controls show the active break and honor its restrictions; AVKit applies its linear-playback policy. The demo has an HLS interstitial route prefilled with Apple's sample manifest and a selector for all three surfaces. **Device verification:** the user confirmed the ad played, begin/end diagnostics appeared, and all three surfaces were checked. Integrated content/ad timeline semantics remain future work.
+**Implementation:** The shared HLS path observes active interstitials, publishes normalized ad-break state and diagnostics, and enforces active and scheduled forward-seek restrictions. Managed and advanced controls show the active break and honor its restrictions. The demo has an HLS interstitial route prefilled with Apple's sample manifest and a selector for all three surfaces. **Device verification:** the user confirmed the ad played, begin/end diagnostics appeared, and all three surfaces were checked. **Open device issue:** on the current ads branch, playback pauses after exiting native AVKit fullscreen on Managed and AVKit, including after the ad break ends; the user now reports the same issue in ordinary examples, which worked on `main`. The standalone custom-player fullscreen flow continues playback. For regression isolation, the shared AVKit ads policy bridge has been temporarily reverted to its `main` behavior; this means AVKit's ad-specific seek restriction is currently disabled. Test fullscreen exit on device before restoring AVKit ad restrictions. Integrated content/ad timeline semantics remain future work.
 
 ## Goal
 
@@ -50,7 +50,7 @@ Provider capabilities must be part of surface acceptance. For example, Google IM
 
 ## Work sequence
 
-1. **Finish remaining HLS work.** Complete integrated timeline semantics, then verify source replacement, cancellation, and teardown across all three surfaces. Playback and diagnostics have already been verified on device with Apple's sample stream.
+1. **Finish remaining HLS work.** Complete integrated timeline semantics, then verify source replacement, cancellation, teardown, and fullscreen exit after an ad break across all three surfaces. Playback and diagnostics have already been verified on device with Apple's sample stream; investigate the reported regression where native AVKit fullscreen exit pauses playback on both interstitial and ordinary streams, despite working on `main`.
 2. **Select the client-side provider.** Confirm whether the first adapter targets Google IMA or another vendor, and verify the ad formats and device/presentation features it supports.
 3. **Finalize shared playback semantics.** Document break states, normalized events, timeline semantics, seek/skip policy, failure behavior, source-mode selection, and ambiguous hybrid handling before finalizing public API names.
 4. **Build the client-side provider adapter.** Define provider lifecycle, ad-overlay/container, content playhead, pause/resume, and teardown hooks for all three surfaces. Keep vendor dependencies and provider policy outside the core AVFoundation engine.

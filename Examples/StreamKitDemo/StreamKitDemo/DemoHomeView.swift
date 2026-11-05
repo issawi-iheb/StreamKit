@@ -28,7 +28,7 @@ struct DemoHomeView: View {
 
                     demoSection("Playback examples") {
                         NavigationLink {
-                            HLSInterstitialDemoView()
+                            HLSInterstitialDemoView(session: $hlsInterstitialSession)
                         } label: {
                             DemoNavigationCard(
                                 title: "HLS interstitial ads",

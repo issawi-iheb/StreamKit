@@ -3,11 +3,13 @@ import SwiftUI
 
 @MainActor
 struct HLSInterstitialDemoView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var session: StreamPlayerSession?
     @State private var streamURL = "https://devstreaming-cdn.apple.com/videos/streaming/examples/interstitial-sample/mvp_interstitial_sample.m3u8"
     @State private var selectedSurface: HLSInterstitialPlayerSurface = .managed
-    @State private var session: StreamPlayerSession?
     @State private var trackState = PlayerTrackState()
     @State private var controlsVisible = true
+    @State private var isFullscreenPresented = false
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -81,7 +83,9 @@ struct HLSInterstitialDemoView: View {
                     session: session,
                     selectedSurface: $selectedSurface,
                     trackState: trackState,
-                    controlsVisible: $controlsVisible
+                    controlsVisible: $controlsVisible,
+                    isFullscreenPresented: $isFullscreenPresented,
+                    onFullscreen: { isFullscreenPresented = true }
                 )
             }
 
@@ -92,10 +96,41 @@ struct HLSInterstitialDemoView: View {
         }
         .navigationTitle("HLS Interstitials")
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear {
-            guard let session else { return }
-            Task { try? await session.shutdown() }
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: closeRoute) {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .accessibilityIdentifier("hlsInterstitial.back")
+            }
         }
+        .fullScreenCover(isPresented: $isFullscreenPresented) {
+            if selectedSurface == .advanced,
+               let session {
+                DemoPlayerView(
+                    controller: session.controller,
+                    snapshot: session.snapshot,
+                    trackState: trackState,
+                    isFullscreen: true,
+                    onFullscreen: { isFullscreenPresented = false },
+                    controlsVisible: $controlsVisible,
+                    isActiveSurface: true
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.black)
+                .ignoresSafeArea()
+            }
+        }
+    }
+
+    private func closeRoute() {
+        let closingSession = session
+        session = nil
+        dismiss()
+
+        guard let closingSession else { return }
+        Task { try? await closingSession.shutdown() }
     }
 
     private func loadStream() {
@@ -155,6 +190,8 @@ private struct HLSInterstitialPlayerSection: View {
     @Binding var selectedSurface: HLSInterstitialPlayerSurface
     let trackState: PlayerTrackState
     @Binding var controlsVisible: Bool
+    @Binding var isFullscreenPresented: Bool
+    let onFullscreen: () -> Void
 
     var body: some View {
         playerSurface
@@ -188,9 +225,9 @@ private struct HLSInterstitialPlayerSection: View {
                 snapshot: session.snapshot,
                 trackState: trackState,
                 isFullscreen: false,
-                onFullscreen: {},
+                onFullscreen: onFullscreen,
                 controlsVisible: $controlsVisible,
-                isActiveSurface: true
+                isActiveSurface: !isFullscreenPresented
             )
         case .avKit:
             StreamAVPlayerView(

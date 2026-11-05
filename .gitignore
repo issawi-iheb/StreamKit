@@ -7,3 +7,6 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 .swiftpm/
+/.agents/skills/streamkit-avfoundation/
+/.agents/skills/streamkit-playback-debugging/
+/.agents/skills/streamkit-change-review/

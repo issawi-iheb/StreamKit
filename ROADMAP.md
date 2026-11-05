@@ -123,6 +123,9 @@ separate integration boundaries for DRM and advertising.
 
 ## PHASE 4 — Advertising
 
+### OPEN DEVICE ISSUE
+- **Device verification pending** — On the current ads branch, playback pauses after exiting native AVKit fullscreen on Managed and AVKit, for both HLS interstitial and ordinary streams; the user reports it worked on `main`. The standalone custom-player fullscreen flow continues playback. The ads-only AVKit policy bridge is temporarily reverted to the `main` implementation to isolate the regression; AVKit's ad-specific seek restriction is disabled during this check. Verify fullscreen exit on device before restoring that behavior.
+
 ### ACCEPTANCE CRITERIA:
 - Ad playback works through the managed, advanced (`StreamPlayerController` + `StreamVideoView`), and AVKit (`StreamAVPlayerView`) paths.
 - HLS interstitial and client-side ad integration boundaries defined
