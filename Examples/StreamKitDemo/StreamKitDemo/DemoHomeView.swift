@@ -8,6 +8,7 @@ struct DemoHomeView: View {
     @StateObject private var presentationSession = PresentationDemoSession()
     @StateObject private var standalonePlayerSession = StandalonePlayerDemoSession()
     @StateObject private var managedPlayerSession = ManagedPlayerDemoSession()
+    @State private var hlsInterstitialSession: StreamPlayerSession?
 
     @State private var isStandalonePlayerPresented = false
 

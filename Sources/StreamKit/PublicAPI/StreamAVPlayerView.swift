@@ -31,6 +31,7 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
     private var playbackStateTask: Task<Void, Never>?
     private let isApplicationInBackground: @MainActor () -> Bool
     private var stopRequestedByHost = false
+    private var fullscreenExitObservation: NSKeyValueObservation?
 
     public convenience init(
         restorationHandler: @escaping StreamPictureInPictureRestorationHandler
@@ -143,6 +144,29 @@ public final class StreamAVPlayerPresentationController: NSObject, ObservableObj
 }
 
 extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
+    public func playerViewController(
+        _ playerViewController: AVPlayerViewController,
+        willEndFullScreenPresentationWithAnimationCoordinator coordinator: UIViewControllerTransitionCoordinator
+    ) {
+        guard isCurrent(playerViewController),
+              let controller = playbackController,
+              controller.snapshot.intent == .play,
+              let player = playerViewController.player else { return }
+
+        // Resume as soon as AVKit pauses, not when the transition ends.
+        fullscreenExitObservation = player.observe(\.timeControlStatus) { player, _ in
+            if player.timeControlStatus == .paused {
+                player.play()
+            }
+        }
+
+        coordinator.animate(alongsideTransition: nil) { [weak self, weak player] _ in
+            self?.fullscreenExitObservation = nil
+            // Fallback in case the pause landed after the observer was removed.
+            if player?.timeControlStatus == .paused { player?.play() }
+        }
+    }
+    
     public func playerViewController(
         _ playerViewController: AVPlayerViewController,
         willStartPictureInPictureWith proposedViewController: UIViewController
