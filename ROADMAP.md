@@ -176,8 +176,8 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Latest repository commit**: `1587e59` (`Pin managed ad-host integration in demo`) on `ads/discovery`; this update records subsequent local ad-race and logging changes and will be reflected in the next branch commit.
+- **Latest implementation commit**: `42e805c` (`Fix seek races during client-side ad breaks`) on `ads/discovery`.
 - **Current phase**: Phase 3 — normalized lifecycle diagnostics and iOS 18+ AVMetrics enrichment are implemented. Analytics-provider integrations remain deferred. Shared diagnostics UI is available on managed, custom-controls, and AVKit/PiP routes; FairPlay has its own request report. Additional example routes remain to be wired. Phase 1 production-readiness and Phase 2 provider-specific acceptance gaps remain open.
-- **Latest local verification (2026-10-28)**: The StreamKit demo builds for the generic iOS Simulator destination. CoreSimulator was unavailable for runtime visual inspection in the latest pass; no new screenshot or device verification is claimed here.
+- **Latest local verification (2026-11-12)**: 26 focused package tests passed across ad-break, client-side integration, and ad-coordinator suites. IMA/HLS demo checks across each player surface remain outstanding; no new demo/device acceptance is claimed here.
 - **Current audit**: [AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) is the single current source-based audit. Production-readiness work remains open as listed in that report.
 - **Next milestone**: Complete the Reliability and developer observability target above. Ads and offline playback remain product decisions, not assumed feature-parity commitments.
