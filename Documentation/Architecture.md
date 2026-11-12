@@ -18,7 +18,7 @@ For a practical source map and change guide, see [Contributing to StreamKit](Con
 | App-owned controls | `StreamPlayerController` + `StreamVideoView` | Layout, controls, track UI, and controller lifetime; use `StreamPictureInPictureController` when custom PiP is needed |
 | Advanced AVKit | Retained `StreamPlayerSession` or `StreamAVPlayerView` + presentation controller | Route retention/restoration and explicit AVKit presentation lifecycle |
 
-All three paths use the same `MediaSource`, controller, and AVFoundation playback pipeline. VOD/live semantics, cookies, user agent, bearer-authenticated HLS, and FairPlay are source configuration. Provider credentials and DRM server protocol remain app-owned. `PlayerConfiguration.autoplay` defaults to `false`; the demo's managed example opts in so playback begins when the source is ready.
+All three paths use the same `MediaSource`, controller, and AVFoundation playback pipeline. VOD/live semantics, cookies, user agent, bearer-authenticated HLS, and FairPlay are source configuration. `PlayerConfiguration.expensiveNetworkPlaybackPolicy` can optionally cap bitrate and/or HLS resolution on networks iOS classifies as expensive; with no policy, AVFoundation keeps its default adaptive behavior. Provider credentials and DRM server protocol remain app-owned. `PlayerConfiguration.autoplay` defaults to `false`; the demo's managed example opts in so playback begins when the source is ready.
 
 ## Demo screens and visual language
 

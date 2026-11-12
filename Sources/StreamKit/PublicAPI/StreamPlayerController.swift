@@ -117,7 +117,8 @@ public final class StreamPlayerController {
         audioPlaybackFocusCoordinator: AudioPlaybackFocusCoordinator? = nil
     ) {
         let engine = AVFoundationPlaybackEngine(
-            keepsLiveTimelineCurrentWhilePaused: configuration.keepsLiveTimelineCurrentWhilePaused
+            keepsLiveTimelineCurrentWhilePaused: configuration.keepsLiveTimelineCurrentWhilePaused,
+            expensiveNetworkPlaybackPolicy: configuration.expensiveNetworkPlaybackPolicy
         )
         self.configuration = configuration
         #if os(iOS)

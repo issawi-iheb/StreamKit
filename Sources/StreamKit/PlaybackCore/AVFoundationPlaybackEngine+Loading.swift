@@ -52,6 +52,14 @@ extension AVFoundationPlaybackEngine {
         authenticatedResourceLoader = preparedItem.authenticatedResourceLoader
         fairPlayContentKeySession = preparedItem.fairPlayContentKeySession
         let item = preparedItem.item
+        if let policy = expensiveNetworkPlaybackPolicy {
+            if let maximumBitRate = policy.maximumBitRate {
+                item.preferredPeakBitRateForExpensiveNetworks = maximumBitRate
+            }
+            if let maximumResolution = policy.maximumResolution {
+                item.preferredMaximumResolutionForExpensiveNetworks = maximumResolution
+            }
+        }
         if source.presentationKind == .live,
            keepsLiveTimelineCurrentWhilePaused {
             item.canUseNetworkResourcesForLiveStreamingWhilePaused = true

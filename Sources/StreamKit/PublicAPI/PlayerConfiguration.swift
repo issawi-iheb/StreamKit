@@ -19,14 +19,21 @@ public struct PlayerConfiguration: Equatable, Sendable {
     /// Disabled by default.
     public let keepsLiveTimelineCurrentWhilePaused: Bool
 
+    /// Optional bitrate and resolution limits for expensive networks such as
+    /// cellular. `nil` preserves AVFoundation's system defaults. AVFoundation
+    /// continues adaptive HLS variant selection within any configured limits.
+    public let expensiveNetworkPlaybackPolicy: ExpensiveNetworkPlaybackPolicy?
+
     /// Creates a player configuration.
     public init(
         autoplay: Bool = false,
         automaticallyResumesAfterAudioInterruption: Bool = true,
-        keepsLiveTimelineCurrentWhilePaused: Bool = false
+        keepsLiveTimelineCurrentWhilePaused: Bool = false,
+        expensiveNetworkPlaybackPolicy: ExpensiveNetworkPlaybackPolicy? = nil
     ) {
         self.autoplay = autoplay
         self.automaticallyResumesAfterAudioInterruption = automaticallyResumesAfterAudioInterruption
         self.keepsLiveTimelineCurrentWhilePaused = keepsLiveTimelineCurrentWhilePaused
+        self.expensiveNetworkPlaybackPolicy = expensiveNetworkPlaybackPolicy
     }
 }

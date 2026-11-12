@@ -58,6 +58,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
     var isShutdown = false
     var playbackRate: Float = 1.0
     let keepsLiveTimelineCurrentWhilePaused: Bool
+    let expensiveNetworkPlaybackPolicy: ExpensiveNetworkPlaybackPolicy?
     /// Test-only URLProtocol injection; production leaves this unset.
     let urlProtocolClassesForTesting: [AnyClass]?
 
@@ -69,6 +70,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
 
     init(
         keepsLiveTimelineCurrentWhilePaused: Bool = false,
+        expensiveNetworkPlaybackPolicy: ExpensiveNetworkPlaybackPolicy? = nil,
         urlProtocolClassesForTesting: [AnyClass]? = nil
     ) {
         let stream = AsyncStream<PlaybackEngineEventEnvelope>.makeStream(
@@ -79,6 +81,7 @@ final class AVFoundationPlaybackEngine: PlaybackEngine {
         self.eventStream = stream.stream
         self.eventContinuation = stream.continuation
         self.keepsLiveTimelineCurrentWhilePaused = keepsLiveTimelineCurrentWhilePaused
+        self.expensiveNetworkPlaybackPolicy = expensiveNetworkPlaybackPolicy
         self.urlProtocolClassesForTesting = urlProtocolClassesForTesting
     }
 }

@@ -91,6 +91,25 @@ StreamPlayerView(source: vod) // or StreamPlayerView(source: live)
 
 `PlayerConfiguration.autoplay` defaults to `false`, so AVKit's controls wait for the viewer to start playback. To start automatically once ready, pass `configuration: PlayerConfiguration(autoplay: true)` to `StreamPlayerView(source:configuration:)` or `StreamPlayerSession`. The demo's managed-player example opts in; the package default remains off. Live seekable ranges are sampled during playback updates; while paused, the last reported range may become stale because AVFoundation may stop updating live state. If the UI must keep the live/DVR window current while paused, opt in with `keepsLiveTimelineCurrentWhilePaused: true`. Apple notes this can use additional network and power resources, so it stays off by default ([AVPlayerItem documentation](https://developer.apple.com/documentation/avfoundation/avplayeritem/canusenetworkresourcesforlivestreamingwhilepaused)).
 
+### Limit quality on expensive networks
+
+AVPlayer adapts HLS variant selection to current network conditions by default. To limit cellular or another network iOS classifies as expensive, optionally set a bitrate cap, a resolution cap, or both. AVPlayer continues choosing variants adaptively within those limits; this is not a manual poor/medium/Wi-Fi classifier. With no policy configured, playback keeps AVFoundation's defaults.
+
+```swift
+let networkPolicy = ExpensiveNetworkPlaybackPolicy(
+    maximumBitRate: 2_000_000,
+    maximumResolution: CGSize(width: 1280, height: 720)
+)
+
+let configuration = PlayerConfiguration(
+    expensiveNetworkPlaybackPolicy: networkPolicy
+)
+
+StreamPlayerView(source: vod, configuration: configuration)
+```
+
+The bitrate is in bits per second. The resolution limit applies to HLS. AVFoundation may use a lower bitrate or resolution when the available variants cannot meet the requested cap. See Apple's [`preferredPeakBitRateForExpensiveNetworks`](https://developer.apple.com/documentation/avfoundation/avplayeritem/preferredpeakbitrateforexpensivenetworks) and [`preferredMaximumResolutionForExpensiveNetworks`](https://developer.apple.com/documentation/avfoundation/avplayeritem/preferredmaximumresolutionforexpensivenetworks) documentation.
+
 ### Add bearer authentication and FairPlay
 
 The managed view accepts the same request configuration. The host app supplies its token provider and its FairPlay provider; StreamKit routes media and key requests through the existing playback engine.
