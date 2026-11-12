@@ -1,6 +1,6 @@
 # StreamKit Roadmap
 
-> **Current code status — 2026-11-12:** Advertising has a provider-neutral client-side contract, an optional Google IMA adapter, and a separate HLS interstitial path. The fullscreen-exit fix is committed in `ce29826`, passed on iPhone 12 / iOS 27.0.1, and is pinned by the demo lockfile. Ad-provider/surface acceptance, a post-await seek/ad-break race, and raw IMA error logging remain open. See [the current branch code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) and [advertising architecture](Documentation/Architecture.md#advertising-architecture).
+> **Current code status — 2026-11-12:** Advertising has a provider-neutral client-side contract, an optional Google IMA adapter, and a separate HLS interstitial path. The fullscreen-exit fix is committed in `935cc42`, passed on iPhone 12 / iOS 27.0.1, and is pinned by the demo lockfile. Managed player views mount their ad display host automatically; lower-level surfaces keep explicit host composition. Ad-provider/surface acceptance, a post-await seek/ad-break race, and raw IMA error logging remain open. See [the current branch code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) and [advertising architecture](Documentation/Architecture.md#advertising-architecture).
 
 ## PROJECT GOAL
 
@@ -129,7 +129,7 @@ separate integration boundaries for DRM and advertising.
 - **Implemented** — Core provider-neutral client-side ad contracts and per-controller session coordination.
 - **Implemented** — Optional `StreamKitIMA` Google IMA adapter with a separate IMA loader/manager session per player.
 - **Implemented** — HLS interstitial event monitoring through AVFoundation, separate from client-side providers.
-- **Fixed and device-verified** — AVKit fullscreen exit playback; focused regression test passed on iPhone 12 / iOS 27.0.1. The demo lockfile pins commit `ce29826`.
+- **Fixed and device-verified** — AVKit fullscreen exit playback; focused regression test passed on iPhone 12 / iOS 27.0.1. The demo lockfile pins commit `935cc42`.
 - **Open** — Provider/device acceptance across surfaces, concurrent sessions, failure/timeout/replacement, and HLS interstitial transitions. See current audit.
 
 ### ACCEPTANCE CRITERIA:

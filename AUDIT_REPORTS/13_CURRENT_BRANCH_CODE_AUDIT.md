@@ -2,19 +2,19 @@
 
 This is the single current audit for the `ads/discovery` checkout. It is based on the source code in this checkout and the sibling `StreamKitIMA` package. It replaces the older overlapping audit snapshots.
 
-**Inspected revision:** `ce29826` on `ads/discovery`, containing the fullscreen fix, regression assertion, refreshed documentation, and removal of superseded audits. The physical-device test was run against the same local source before it was committed.
+**Inspected revision:** `935cc42` on `ads/discovery`, containing the fullscreen fix, managed ad-host mounting, regression assertion, refreshed documentation, and removal of superseded audits. The physical-device fullscreen test was run against the same source before it was committed.
 
 ## Executive assessment
 
 The SDK has a coherent single-player ownership model: each `StreamPlayerController` owns one AVFoundation engine/player, source generation guards, state streams, client-side ad coordination, and an ad display container. `StreamPlayerSession` is a managed facade that constructs and owns a controller. The optional `StreamKitIMA` package adapts Google IMA without adding it to core dependencies. UIKit is used to bridge AVPlayerLayer, AVKit presentation/PiP, and IMA display requirements; it is required by the current iOS integration choices, though not by AVFoundation playback in isolation.
 
-The fullscreen-exit playback defect is **fixed in commit `ce29826` and verified on device**. The demo lockfile now points to that commit. The current ad paths are structurally implemented, but real IMA ad delivery, all surface combinations, concurrent ads, and HLS interstitial acceptance are not fully verified. One seek/ad-break race and one vendor-log privacy issue remain actionable.
+The fullscreen-exit playback defect is **fixed in commit `935cc42` and verified on device**. The demo lockfile now points to that commit. The current ad paths are structurally implemented, but real IMA ad delivery, all surface combinations, concurrent ads, and HLS interstitial acceptance are not fully verified. One seek/ad-break race and one vendor-log privacy issue remain actionable.
 
 ## Fixed and verified
 
 | Item | Status | Evidence and limit |
 |---|---|---|
-| Playback pauses after AVKit fullscreen exit | **Fixed; device-verified** | `StreamAVPlayerView` observes the exit pause and asks `StreamPlayerController.reconcileTransportIntent()` to restore the latest permitted intent. The focused UI test asserts the returned surface exposes `Pause` after exit. It passed on physical iPhone 12 / iOS 27.0.1 using the same source now in commit `ce29826`. |
+| Playback pauses after AVKit fullscreen exit | **Fixed; device-verified** | `StreamAVPlayerView` observes the exit pause and asks `StreamPlayerController.reconcileTransportIntent()` to restore the latest permitted intent. The focused UI test asserts the returned surface exposes `Pause` after exit. It passed on physical iPhone 12 / iOS 27.0.1 using the same source now in commit `935cc42`. |
 | Regression assertion | **Committed** | `testManagedPlayerCanEnterAndExitFullscreen` checks post-exit playback state, not only route return. |
 | Core dependency isolation | **Confirmed by source** | Root `Package.swift` has no external package dependencies. Google IMA is in sibling package `StreamKitIMA`. |
 
@@ -34,7 +34,7 @@ No full package suite or full demo UI suite was run for the fullscreen fix. Do n
 
 - Core product: iOS 18 minimum, Swift tools 6.4, one library target and one test target, no external dependencies.
 - Optional adapter: `StreamKitIMA` depends on StreamKit branch `ads/discovery` and Google IMA from 3.33.0. It is a separate package/product, which keeps the core dependency graph free of the vendor SDK.
-- The demo Xcode project uses branch references for StreamKit and StreamKitIMA while its current `Package.resolved` pins StreamKit `ce29826`, StreamKitIMA `f6e8c6b`, and Google IMA `3.34.1`. The lockfile makes this checkout resolution specific, but branch references still float on future updates; release validation should use immutable tags/commits and document the exact adapter/core compatibility pair.
+- The demo Xcode project uses branch references for StreamKit and StreamKitIMA while its current `Package.resolved` pins StreamKit `935cc42`, StreamKitIMA `f6e8c6b`, and Google IMA `3.34.1`. The lockfile makes this checkout resolution specific, but branch references still float on future updates; release validation should use immutable tags/commits and document the exact adapter/core compatibility pair.
 - Demo deployment target is iOS 26.5, above the package's iOS 18 minimum. Current demo builds therefore cannot prove the minimum supported OS.
 - The main module is organized by public API, playback core, and internal support. The controller is a substantial orchestration point, but current source does not establish a stable second backend or responsibility boundary that warrants a broad refactor. Keep seams internal unless a concrete second backend or public extension need appears.
 

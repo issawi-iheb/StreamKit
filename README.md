@@ -601,4 +601,4 @@ The demo's separate **Protected Playback** section is prefilled with a public Mu
 
 ## Continuous Integration
 
-The focused managed-player fullscreen-exit regression test passed on a connected iPhone 12 running iOS 27.0.1. The test verifies playback is still active after exiting AVKit fullscreen. The demo lockfile pins StreamKit commit `ce29826`, which contains the fix. The full package suite and full demo UI suite were not rerun for this fix; see the [current code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) for exact scope and limits.
+The focused managed-player fullscreen-exit regression test passed on a connected iPhone 12 running iOS 27.0.1. The test verifies playback is still active after exiting AVKit fullscreen. The demo lockfile pins StreamKit commit `935cc42`, which contains the fix and automatic managed ad-host mounting. The full package suite and full demo UI suite were not rerun for this fix; see the [current code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) for exact scope and limits.
