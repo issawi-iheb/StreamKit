@@ -249,7 +249,9 @@ extension StreamPlayerController {
                 message: "A ready media source is required to seek."
             )
         }
-        try validateClientSideForwardSeek(to: time)
+        let seekStartTime = snapshot.currentTime
+        let adBreakGenerationAtStart = clientSideAdBreakGeneration
+        try validateClientSideForwardSeek(from: seekStartTime, to: time)
         let generation = loadGeneration
         let seekGeneration = beginSeek()
 
@@ -261,6 +263,14 @@ extension StreamPlayerController {
         else {
             throw CancellationError()
         }
+
+        try await revalidateClientSideSeekAfterAwait(
+            from: seekStartTime,
+            to: time,
+            adBreakGenerationAtStart: adBreakGenerationAtStart,
+            loadGeneration: generation,
+            seekGeneration: seekGeneration
+        )
 
         updateSnapshot(
             PlaybackSnapshot(
@@ -308,9 +318,14 @@ extension StreamPlayerController {
             )
         }
 
+        let seekStartTime = snapshot.currentTime
+        let targetTime = snapshot.timeline.latestSeekableTime
+            .map { $0 - offsetFromLive }
+        let adBreakGenerationAtStart = clientSideAdBreakGeneration
+
         if snapshot.adBreak?.deliveryMode == .clientSide,
            snapshot.adBreak?.restrictsForwardSeeking == true {
-            guard let latestSeekableTime = snapshot.timeline.latestSeekableTime else {
+            guard let targetTime else {
                 throw PlaybackFailure(
                     code: .adPlaybackRestricted,
                     message: "Seeking to the live edge is restricted during this ad break."
@@ -318,7 +333,8 @@ extension StreamPlayerController {
             }
 
             try validateClientSideForwardSeek(
-                to: latestSeekableTime - offsetFromLive
+                from: seekStartTime,
+                to: targetTime
             )
         }
 
@@ -332,9 +348,22 @@ extension StreamPlayerController {
         else {
             throw CancellationError()
         }
+
+        let observedTargetTime = snapshot.currentTime != seekStartTime
+            ? snapshot.currentTime
+            : targetTime
+        try await revalidateClientSideSeekAfterAwait(
+            from: seekStartTime,
+            to: observedTargetTime,
+            adBreakGenerationAtStart: adBreakGenerationAtStart,
+            loadGeneration: generation,
+            seekGeneration: seekGeneration,
+            assumeForwardWhenTargetIsUnknown: true
+        )
     }
 
     private func validateClientSideForwardSeek(
+        from currentTime: TimeInterval,
         to targetTime: TimeInterval
     ) throws {
         guard let adBreak = snapshot.adBreak,
@@ -345,7 +374,7 @@ extension StreamPlayerController {
         }
 
         guard PlaybackInterstitialSeekPolicy.activeBreakRestrictsForwardSeek(
-            from: snapshot.currentTime,
+            from: currentTime,
             to: targetTime,
             restrictsForwardSeeking: true
         ) else {
@@ -355,6 +384,82 @@ extension StreamPlayerController {
         throw PlaybackFailure(
             code: .adPlaybackRestricted,
             message: "Forward seeking is restricted during this ad break."
+        )
+    }
+
+    private func revalidateClientSideSeekAfterAwait(
+        from safeTime: TimeInterval,
+        to targetTime: TimeInterval?,
+        adBreakGenerationAtStart: UInt64,
+        loadGeneration: UInt64,
+        seekGeneration: UInt64,
+        assumeForwardWhenTargetIsUnknown: Bool = false
+    ) async throws {
+        let breakStartedDuringSeek =
+            clientSideAdBreakGeneration != adBreakGenerationAtStart
+
+        do {
+            if let targetTime {
+                if breakStartedDuringSeek, targetTime > safeTime {
+                    throw PlaybackFailure(
+                        code: .adPlaybackRestricted,
+                        message: "Forward seeking is restricted when an ad break starts during the seek."
+                    )
+                }
+
+                try validateClientSideForwardSeek(
+                    from: safeTime,
+                    to: targetTime
+                )
+            } else if breakStartedDuringSeek,
+                      assumeForwardWhenTargetIsUnknown {
+                throw PlaybackFailure(
+                    code: .adPlaybackRestricted,
+                    message: "Seeking to the live edge is restricted when an ad break starts during the seek."
+                )
+            }
+        } catch let failure as PlaybackFailure
+            where failure.code == .adPlaybackRestricted {
+            do {
+                try await engine.seek(to: safeTime)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                guard !isShutdown,
+                      self.loadGeneration == loadGeneration,
+                      self.seekGeneration == seekGeneration else {
+                    throw CancellationError()
+                }
+
+                await engine.pause()
+                throw PlaybackFailure(
+                    code: .adPlaybackRestricted,
+                    message: "Forward seeking is restricted during the ad break, and the previous content position could not be restored."
+                )
+            }
+
+            guard !isShutdown,
+                  self.loadGeneration == loadGeneration,
+                  self.seekGeneration == seekGeneration else {
+                throw CancellationError()
+            }
+
+            updateSnapshotCurrentTime(safeTime)
+            await reconcileTransportIntent()
+            throw failure
+        }
+    }
+
+    private func updateSnapshotCurrentTime(_ currentTime: TimeInterval) {
+        updateSnapshot(
+            PlaybackSnapshot(
+                phase: snapshot.phase,
+                intent: snapshot.intent,
+                currentTime: currentTime,
+                duration: snapshot.duration,
+                failure: snapshot.failure,
+                timeline: snapshot.timeline
+            )
         )
     }
 }

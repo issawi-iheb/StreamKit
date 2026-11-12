@@ -68,6 +68,7 @@ extension StreamPlayerController {
         if adBreak?.deliveryMode == .clientSide,
            previous?.deliveryMode != .clientSide {
             playbackCommandGeneration &+= 1
+            clientSideAdBreakGeneration &+= 1
         }
 
         if let previous,

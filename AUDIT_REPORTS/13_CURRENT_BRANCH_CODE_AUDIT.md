@@ -2,13 +2,13 @@
 
 This is the single current audit for the `ads/discovery` checkout. It is based on the source code in this checkout and the sibling `StreamKitIMA` package. It replaces the older overlapping audit snapshots.
 
-**Inspected revision:** `935cc42` on `ads/discovery`, containing the fullscreen fix, managed ad-host mounting, regression assertion, refreshed documentation, and removal of superseded audits. The physical-device fullscreen test was run against the same source before it was committed.
+**Inspected revision:** `1587e59` on `ads/discovery`, plus the local changes described below. The fullscreen fix was device-tested on iPhone 12 / iOS 27.0.1. The new seek-race and client-side lifecycle tests pass in the focused package run; IMA/HLS demo checks across surfaces have not yet been run.
 
 ## Executive assessment
 
 The SDK has a coherent single-player ownership model: each `StreamPlayerController` owns one AVFoundation engine/player, source generation guards, state streams, client-side ad coordination, and an ad display container. `StreamPlayerSession` is a managed facade that constructs and owns a controller. The optional `StreamKitIMA` package adapts Google IMA without adding it to core dependencies. UIKit is used to bridge AVPlayerLayer, AVKit presentation/PiP, and IMA display requirements; it is required by the current iOS integration choices, though not by AVFoundation playback in isolation.
 
-The fullscreen-exit playback defect is **fixed in commit `935cc42` and verified on device**. The demo lockfile now points to that commit. The current ad paths are structurally implemented, but real IMA ad delivery, all surface combinations, concurrent ads, and HLS interstitial acceptance are not fully verified. One seek/ad-break race and one vendor-log privacy issue remain actionable.
+The fullscreen-exit playback defect is **fixed and verified on device**. The demo lockfile pins the corresponding core revision. The post-await seek/ad-break race now restores the prior position and is covered by delayed-engine tests. The IMA adapter no longer logs raw vendor error messages. The ad paths are structurally implemented, but real IMA delivery and IMA/HLS demo behavior across surfaces are not fully verified.
 
 ## Fixed and verified
 
@@ -17,6 +17,8 @@ The fullscreen-exit playback defect is **fixed in commit `935cc42` and verified 
 | Playback pauses after AVKit fullscreen exit | **Fixed; device-verified** | `StreamAVPlayerView` observes the exit pause and asks `StreamPlayerController.reconcileTransportIntent()` to restore the latest permitted intent. The focused UI test asserts the returned surface exposes `Pause` after exit. It passed on physical iPhone 12 / iOS 27.0.1 using the same source now in commit `935cc42`. |
 | Regression assertion | **Committed** | `testManagedPlayerCanEnterAndExitFullscreen` checks post-exit playback state, not only route return. |
 | Core dependency isolation | **Confirmed by source** | Root `Package.swift` has no external package dependencies. Google IMA is in sibling package `StreamKitIMA`. |
+| Seek/ad-break race | **Fixed; package-tested** | Delayed-engine tests cover `seek(to:)` and `seekToLiveEdge` when a client-side break begins during the engine await; both restore the starting position and return `.adPlaybackRestricted`. |
+| Raw IMA error logging | **Fixed by code** | `GoogleIMAAdProvider` no longer prints `error.message`; type and numeric code remain available for diagnostics. |
 
 No full package suite or full demo UI suite was run for the fullscreen fix. Do not read the focused device result as full-suite or release acceptance.
 
@@ -43,24 +45,21 @@ No full package suite or full demo UI suite was run for the fullscreen fix. Do n
 - Demo routes now include managed playback, custom controls, advanced AVKit/PiP, live/DVR, multiple players, audio/interruption, bearer authentication, FairPlay, HLS interstitials, and IMA/VAST.
 - The IMA route now relies on `StreamPlayerView` to mount its container for the managed surface and explicitly mounts it for the AVKit and custom-control surfaces. That sample is useful for integration guidance but does not establish broad concurrent-player or provider-replacement acceptance.
 - Focused fullscreen-exit device test passed as described above. Package and complete UI suites were not rerun for this audit update.
-- Ads need explicit tests for no-fill/timeout, failure/fail-open, break pause/resume and user pause, source replacement, simultaneous sessions, each exposed surface, and HLS interstitial transitions.
+- Focused package tests passed: 26 tests across `PlaybackAdBreakTests`, `ClientSideAdIntegrationTests`, and `ClientSideAdCoordinatorTests`. New lifecycle assertions cover independent sessions/containers, replacement invalidation, break start/end, user pause, and shutdown. Decision timeout/provider-failure cases and real IMA/HLS demo checks across all surfaces remain outstanding.
 
 ## Open findings
 
 | Priority | Finding | Code evidence | Recommended next action |
 |---|---|---|---|
-| P1 | A seek can cross into an ad break after its restriction check. `seek(to:)` and `seekToLiveEdge` validate before awaiting the engine, then only check source and seek generations on completion. Ad-break start increments the playback command generation but does not invalidate the in-flight seek generation. | `Sources/StreamKit/PublicAPI/StreamPlayerController+Commands.swift:238-334`; `Sources/StreamKit/PublicAPI/StreamPlayerController+State.swift:62-87` | Revalidate break restrictions after the awaited engine seek and define how to restore a blocked seek target; add deterministic delayed-engine tests for both seek APIs. |
-| P2 | The IMA adapter logs raw vendor error messages. IMA messages can include ad request URLs or response details, while the core failure model intentionally excludes vendor text. | `../../StreamKitIMA/Sources/StreamKitIMA/GoogleIMAAdProvider.swift:238-243` | Keep type/code and safe context only; remove or redact `error.message` before shipping production logs. |
-| P2 | Ads have limited acceptance evidence across their public integration paths. Demo routes exist, but a route alone does not establish ad decision, display, break, replacement, multi-player, or failure behavior. | `Examples/StreamKitDemo/StreamKitDemo/IMAVASTDemoView.swift`, `HLSInterstitialDemoView.swift`, `Sources/StreamKit/InternalSupport/ClientSideAdCoordinator.swift` | Add provider-fixture tests for coordinator lifecycle and focused demo/device checks for the IMA and HLS paths, including all surfaces the SDK claims to support. |
+| P2 | Ads have limited acceptance evidence across their public integration paths. Package tests cover core session lifecycle and seek restrictions, but do not prove real ad display or provider-backed failure behavior on every surface. | `Examples/StreamKitDemo/StreamKitDemo/IMAVASTDemoView.swift`, `HLSInterstitialDemoView.swift`, `Sources/StreamKit/InternalSupport/ClientSideAdCoordinator.swift` | Run focused IMA and HLS demo/device checks across managed, direct AVKit, and custom video surfaces; add provider-backed timeout/failure coverage where current coordinator tests do not cover it. |
 | P2 | Minimum deployment is not demonstrated by the demo target. | `Package.swift` vs demo Xcode deployment setting | Add an iOS 18 package build/test lane and record device/runtime coverage separately. |
 | P3 | Demo package references float branches. | Demo `.pbxproj` and `Package.resolved` | Pin tagged or immutable revisions in release/CI workflows. |
 
 ## Next work
 
-1. Close the post-await ad-restriction seek race with deterministic tests.
-2. Remove raw IMA error text from logs.
-3. Add IMA/HLS ad lifecycle test coverage and run the ad route on device using a controlled tag/stream.
-4. Validate the package at iOS 18 and use immutable dependency revisions for release builds.
+1. Run IMA/HLS demo checks on each supported player surface using a controlled tag/stream.
+2. Add or confirm deterministic decision-timeout and provider-failure coverage.
+3. Validate the package at iOS 18 and use immutable dependency revisions for release builds.
 
 ## Source map
 

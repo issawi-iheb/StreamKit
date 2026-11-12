@@ -1,6 +1,6 @@
 # StreamKit Roadmap
 
-> **Current code status — 2026-11-12:** Advertising has a provider-neutral client-side contract, an optional Google IMA adapter, and a separate HLS interstitial path. The fullscreen-exit fix is committed in `935cc42`, passed on iPhone 12 / iOS 27.0.1, and is pinned by the demo lockfile. Managed player views mount their ad display host automatically; lower-level surfaces keep explicit host composition. Ad-provider/surface acceptance, a post-await seek/ad-break race, and raw IMA error logging remain open. See [the current branch code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) and [advertising architecture](Documentation/Architecture.md#advertising-architecture).
+> **Current code status — 2026-11-12:** Advertising has a provider-neutral client-side contract, an optional Google IMA adapter, and a separate HLS interstitial path. The fullscreen-exit fix is committed in `935cc42`, passed on iPhone 12 / iOS 27.0.1, and is pinned by the demo lockfile. Managed views mount the client-side ad host automatically; direct AVKit and custom video surfaces require the host app to mount it. The post-await seek/ad-break race now has a package fix and regression tests, and raw IMA error text is no longer logged. IMA/HLS demo acceptance across every supported surface remains open. See [the current branch code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) and [advertising architecture](Documentation/Architecture.md#advertising-architecture).
 
 ## PROJECT GOAL
 
@@ -34,7 +34,7 @@ separate integration boundaries for DRM and advertising.
 - Public API stability and supported capability boundaries are documented.
 
 ### Product decisions and deferred capabilities
-- Ads: HLS interstitials and provider-neutral client-side ads are implemented; Google IMA is supplied by the optional `StreamKitIMA` adapter. Real-provider acceptance and the remaining lifecycle/security findings are tracked in the [current code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md).
+- Ads: HLS interstitials and provider-neutral client-side ads are implemented; Google IMA is supplied by the optional `StreamKitIMA` adapter. Seek/ad-break race handling and raw IMA message redaction are implemented. Real-provider acceptance across surfaces and broader lifecycle coverage remain tracked in the [current code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md).
 - Offline playback: scope downloads, storage policy, persistent FairPlay keys, and renewal together; do not treat offline keys as a small extension to online FairPlay.
 - Playlists, cross-platform backends, and vendor analytics integrations remain separate proposals until product requirements justify them.
 
@@ -130,15 +130,15 @@ separate integration boundaries for DRM and advertising.
 - **Implemented** — Optional `StreamKitIMA` Google IMA adapter with a separate IMA loader/manager session per player.
 - **Implemented** — HLS interstitial event monitoring through AVFoundation, separate from client-side providers.
 - **Fixed and device-verified** — AVKit fullscreen exit playback; focused regression test passed on iPhone 12 / iOS 27.0.1. The demo lockfile pins commit `935cc42`.
-- **Open** — Provider/device acceptance across surfaces, concurrent sessions, failure/timeout/replacement, and HLS interstitial transitions. See current audit.
+- **In progress** — Package tests cover independent sessions/containers, source replacement, break start/end, user pause, shutdown, and seeks spanning a break start. Provider-backed ad display and IMA/HLS demo behavior across each surface still need focused acceptance.
 
 ### ACCEPTANCE CRITERIA:
 - **Implemented; acceptance incomplete** — Managed retained-session, advanced (`StreamPlayerController` + `StreamVideoView`), and AVKit (`StreamAVPlayerView`) integration paths exist. Real ad playback across every path still needs verification.
 - **Implemented** — HLS interstitial and client-side ad integration boundaries are separate and defined.
 - **Implemented** — Ad playback events and transitions are modeled.
-- **Partially verified** — Seeking restrictions and ad-break behavior are defined; a post-await seek/ad-break race remains open.
-- **Implemented; acceptance incomplete** — Optional Google IMA provider exists; real-provider lifecycle, concurrency, and failure-path acceptance remains open.
-- **Open** — Broader ad regression tests for timeout, failure, replacement, concurrency, surfaces, and HLS transitions.
+- **Fixed and package-tested** — Seek restrictions are rechecked after asynchronous engine seeks; a break that begins during a forward or live-edge seek restores the prior content position and returns `.adPlaybackRestricted`.
+- **Implemented; acceptance incomplete** — Optional Google IMA provider exists and no longer logs raw IMA error messages. Real-provider playback, timeout/failure behavior, and lifecycle acceptance remain open.
+- **In progress** — Regression tests cover seek races and core session lifecycle behavior. Decision timeout, provider failure, and focused IMA/HLS demo checks across all player surfaces remain to be verified.
 
 ## PHASE 5 — Advanced playback and presentation
 
@@ -176,7 +176,7 @@ separate integration boundaries for DRM and advertising.
 
 ## CURRENT STATUS
 
-- **Latest repository commit**: `9957a6b` (`Document demo routes and architecture visuals`) on `main`. The latest code implementation baseline is `23fede9` (`Polish demo player visual consistency`).
+- **Latest repository commit**: `1587e59` (`Pin managed ad-host integration in demo`) on `ads/discovery`; this update records subsequent local ad-race and logging changes and will be reflected in the next branch commit.
 - **Current phase**: Phase 3 — normalized lifecycle diagnostics and iOS 18+ AVMetrics enrichment are implemented. Analytics-provider integrations remain deferred. Shared diagnostics UI is available on managed, custom-controls, and AVKit/PiP routes; FairPlay has its own request report. Additional example routes remain to be wired. Phase 1 production-readiness and Phase 2 provider-specific acceptance gaps remain open.
 - **Latest local verification (2026-10-28)**: The StreamKit demo builds for the generic iOS Simulator destination. CoreSimulator was unavailable for runtime visual inspection in the latest pass; no new screenshot or device verification is claimed here.
 - **Current audit**: [AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) is the single current source-based audit. Production-readiness work remains open as listed in that report.

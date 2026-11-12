@@ -400,6 +400,65 @@ struct PlaybackAdBreakTests {
         await controller.shutdown()
     }
 
+    @Test("A client-side break that starts during a seek restores the prior position")
+    func clientSideAdBreakStartingDuringSeekRestoresPosition() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        controller.updateSnapshot(
+            PlaybackSnapshot(
+                phase: .playing,
+                intent: .play,
+                currentTime: 30,
+                duration: 300
+            )
+        )
+
+        let seek = Task { () -> PlaybackFailure? in
+            do {
+                try await controller.seek(to: 60)
+                return nil
+            } catch let failure as PlaybackFailure {
+                return failure
+            } catch {
+                return nil
+            }
+        }
+
+        await engine.waitForSeek(id: 1)
+        controller.updateAdBreak(
+            PlaybackAdBreakState(
+                deliveryMode: .clientSide,
+                sequence: 1,
+                restrictsForwardSeeking: true,
+                requiresPreferredPlaybackRate: true
+            )
+        )
+        engine.completeSeek(id: 1)
+
+        await engine.waitForSeek(id: 2)
+        #expect(engine.seekTimes == [60, 30])
+        engine.completeSeek(id: 2)
+
+        let failure = await seek.value
+        #expect(failure?.code == .adPlaybackRestricted)
+        #expect(controller.snapshot.currentTime == 30)
+        #expect(controller.snapshot.adBreak?.deliveryMode == .clientSide)
+        #expect(!engine.isPlaying)
+
+        await controller.shutdown()
+    }
+
     @Test("Client-side ad break blocks forward live-edge seeking")
     @MainActor
     func clientSideAdBreakRestrictsLiveEdgeSeeking() async throws {
@@ -450,6 +509,73 @@ struct PlaybackAdBreakTests {
         }
 
         #expect(engine.liveEdgeSeekOffsets.isEmpty)
+
+        await controller.shutdown()
+    }
+
+    @Test("A client-side break that starts during a live-edge seek restores the prior position")
+    func clientSideAdBreakStartingDuringLiveEdgeSeekRestoresPosition() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(
+                url: URL(string: "https://example.com/live.m3u8")!,
+                presentationKind: .live
+            )
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        controller.updateSnapshot(
+            PlaybackSnapshot(
+                phase: .playing,
+                intent: .play,
+                currentTime: 100,
+                timeline: PlaybackTimeline(
+                    seekableRanges: [PlaybackTimeRange(start: 50, end: 200)],
+                    presentationKind: .live
+                )
+            )
+        )
+
+        engine.suspendNextLiveEdgeSeek()
+        let seek = Task { () -> PlaybackFailure? in
+            do {
+                try await controller.seekToLiveEdge(offsetFromLive: 10)
+                return nil
+            } catch let failure as PlaybackFailure {
+                return failure
+            } catch {
+                return nil
+            }
+        }
+
+        await engine.waitForLiveEdgeSeek()
+        controller.updateAdBreak(
+            PlaybackAdBreakState(
+                deliveryMode: .clientSide,
+                sequence: 1,
+                restrictsForwardSeeking: true,
+                requiresPreferredPlaybackRate: true
+            )
+        )
+        engine.completeLiveEdgeSeek()
+
+        await engine.waitForSeek(id: 1)
+        #expect(engine.liveEdgeSeekOffsets == [10])
+        #expect(engine.seekTimes == [100])
+        engine.completeSeek(id: 1)
+
+        let failure = await seek.value
+        #expect(failure?.code == .adPlaybackRestricted)
+        #expect(controller.snapshot.currentTime == 100)
+        #expect(controller.snapshot.adBreak?.deliveryMode == .clientSide)
+        #expect(!engine.isPlaying)
 
         await controller.shutdown()
     }

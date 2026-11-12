@@ -559,7 +559,16 @@ See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for t
 
 Core StreamKit has provider-neutral client-side ad contracts and a separate HLS interstitial path. Client-side requests are configured on `MediaSource` with `MediaAdMode.clientSide`; an app can supply an adapter implementing `ClientSideAdProvider`. HLS-timed interstitials use `MediaAdMode.hlsInterstitials` and AVFoundation's interstitial event support.
 
-Google IMA is an optional package, [`StreamKitIMA`](https://github.com/issawi-iheb/StreamKitIMA), so the core `StreamKit` package does not depend on Google IMA. The adapter creates an independent IMA loader/manager session per player source load. `StreamPlayerView(source:)` and `StreamPlayerView(session:)` automatically mount their session's ad display container for client-side ads. When composing `StreamVideoView` or `StreamAVPlayerView` directly, the host app mounts `ClientSideAdContainerHost(container:)` as an overlay alongside that player's surface.
+Google IMA is an optional package, [`StreamKitIMA`](https://github.com/issawi-iheb/StreamKitIMA), so the core `StreamKit` package does not depend on Google IMA. The adapter creates an independent IMA loader/manager session per player source load. The app still configures the media source and provider; responsibility for mounting the display host depends on the player surface:
+
+| Player surface | Who mounts the client-side ad host? |
+| --- | --- |
+| `StreamPlayerView(source:)` | StreamKit, when the source uses `.clientSide` ads. |
+| `StreamPlayerView(session:)` | StreamKit, when the retained session's source uses `.clientSide` ads. |
+| Direct `StreamAVPlayerView` composition | The host app mounts `ClientSideAdContainerHost(container:)` over the matching player's surface. |
+| `StreamVideoView` with custom controls | The host app mounts `ClientSideAdContainerHost(container:)` over the matching player's surface. |
+
+The managed view only adds this host for client-side ads. Ordinary playback and HLS interstitials do not use the IMA display host. Direct surface integrations remain explicit because the app owns their view hierarchy; attach the host for the same controller whose player is being displayed.
 
 See the [advertising architecture](Documentation/Architecture.md#advertising-architecture) and the [IMA/VAST demo route](Examples/StreamKitDemo/).
 
@@ -578,7 +587,7 @@ See the [advertising architecture](Documentation/Architecture.md#advertising-arc
 - iOS only (no macOS/tvOS/watchOS support)
 - AVFoundation-based playback only
 - No StreamKit-designed custom controls; use the managed AVKit view or build app-owned controls with `StreamVideoView`
-- No ad vendor dependency in core. HLS interstitial monitoring and provider-neutral client-side orchestration are implemented; Google IMA is an optional package. Real ad-tag, provider lifecycle, and per-surface acceptance still require broader verification.
+- No ad vendor dependency in core. HLS interstitial monitoring and provider-neutral client-side orchestration are implemented; Google IMA is an optional package. Core regression tests cover seek restrictions and key client-side session lifecycle cases; real ad-tag and IMA/HLS demo acceptance across every surface still require broader verification.
 - StreamKit does not provide a full playback-controls UI or set a package-wide orientation policy. Pair `StreamVideoView` with `StreamPictureInPictureController` for app-owned controls, or use `StreamAVPlayerView` for AVKit's standard controls. The demo requests landscape for its custom fullscreen mode.
 - Offline playback requires application-level file handling
 

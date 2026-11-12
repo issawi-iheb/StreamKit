@@ -88,6 +88,8 @@ public final class StreamPlayerController {
     var clientSideAdCoordinator: ClientSideAdCoordinator?
     /// Generates unique, ordered client-side ad-break identifiers.
     var clientSideAdBreakSequence: UInt64 = 0
+    /// Invalidates assumptions made by seeks that span a client-side break start.
+    var clientSideAdBreakGeneration: UInt64 = 0
     /// The selected playback rate, retained across source replacements.
     var selectedPlaybackRate: Float = 1.0
     /// Orders app playback commands across async engine calls.

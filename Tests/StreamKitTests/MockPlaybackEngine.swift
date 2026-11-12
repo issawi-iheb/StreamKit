@@ -9,6 +9,10 @@ final class MockPlaybackEngine: PlaybackEngine {
 
     private var pendingLoads: [Int: CheckedContinuation<Void, Error>] = [:]
     private var pendingSeeks: [Int: CheckedContinuation<Void, Error>] = [:]
+    private var shouldSuspendNextLiveEdgeSeek = false
+    private var pendingLiveEdgeSeek: CheckedContinuation<Void, Error>?
+    private var isLiveEdgeSeekRegistered = false
+    private var liveEdgeSeekRegistrationWaiters: [CheckedContinuation<Void, Never>] = []
     private var registeredSeekIDs: Set<Int> = []
     private var seekRegistrationWaiters: [Int: [CheckedContinuation<Void, Never>]] = [:]
     private var nextSeekID = 0
@@ -184,6 +188,25 @@ final class MockPlaybackEngine: PlaybackEngine {
         }
 
         continuation.resume()
+    }
+
+    func suspendNextLiveEdgeSeek() {
+        shouldSuspendNextLiveEdgeSeek = true
+        isLiveEdgeSeekRegistered = false
+    }
+
+    func waitForLiveEdgeSeek() async {
+        guard !isLiveEdgeSeekRegistered else { return }
+
+        await withCheckedContinuation { continuation in
+            liveEdgeSeekRegistrationWaiters.append(continuation)
+        }
+    }
+
+    func completeLiveEdgeSeek() {
+        guard let pendingLiveEdgeSeek else { return }
+        self.pendingLiveEdgeSeek = nil
+        pendingLiveEdgeSeek.resume()
     }
 
     func suspendNextPlay() {
@@ -378,6 +401,37 @@ final class MockPlaybackEngine: PlaybackEngine {
 
     func seekToLiveEdge(offsetFromLive: TimeInterval) async throws {
         liveEdgeSeekOffsets.append(offsetFromLive)
+
+        guard shouldSuspendNextLiveEdgeSeek else { return }
+        shouldSuspendNextLiveEdgeSeek = false
+        isLiveEdgeSeekRegistered = true
+
+        let waiters = liveEdgeSeekRegistrationWaiters
+        liveEdgeSeekRegistrationWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, Error>) in
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    pendingLiveEdgeSeek = continuation
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelLiveEdgeSeek()
+            }
+        }
+    }
+
+    private func cancelLiveEdgeSeek() {
+        guard let pendingLiveEdgeSeek else { return }
+        self.pendingLiveEdgeSeek = nil
+        pendingLiveEdgeSeek.resume(throwing: CancellationError())
     }
 
     private func cancelSeek(id: Int) {
@@ -427,6 +481,8 @@ final class MockPlaybackEngine: PlaybackEngine {
             seek.resume(throwing: CancellationError())
         }
 
+        cancelLiveEdgeSeek()
+
         // Release load-registration waiters.
         let loadWaiters = loadRegistrationWaiters.values.flatMap { $0 }
         loadRegistrationWaiters.removeAll()
@@ -440,6 +496,12 @@ final class MockPlaybackEngine: PlaybackEngine {
         seekRegistrationWaiters.removeAll()
 
         for waiter in seekWaiters {
+            waiter.resume()
+        }
+
+        let liveEdgeSeekWaiters = liveEdgeSeekRegistrationWaiters
+        liveEdgeSeekRegistrationWaiters.removeAll()
+        for waiter in liveEdgeSeekWaiters {
             waiter.resume()
         }
 
