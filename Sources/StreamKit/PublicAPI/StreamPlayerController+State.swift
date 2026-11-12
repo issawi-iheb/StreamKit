@@ -62,6 +62,13 @@ extension StreamPlayerController {
     func updateAdBreak(_ adBreak: PlaybackAdBreakState?) {
         let previous = snapshot.adBreak
         guard previous != adBreak else { return }
+        // Invalidate content playback operations that began before a
+        // client-side ad break became active. Their completion paths will
+        // reconcile the engine against the latest playback ownership.
+        if adBreak?.deliveryMode == .clientSide,
+           previous?.deliveryMode != .clientSide {
+            playbackCommandGeneration &+= 1
+        }
 
         if let previous,
            previous.sequence != adBreak?.sequence || previous.deliveryMode != adBreak?.deliveryMode {
@@ -125,8 +132,12 @@ extension StreamPlayerController {
             let sourceGeneration = loadGeneration
             let phaseCanPlay = [PlaybackPhase.ready, .playing, .waiting, .paused]
                 .contains(snapshot.phase)
+            let clientSideAdBreakIsActive =
+                snapshot.adBreak?.deliveryMode == .clientSide
+
             let desiredPlayback = snapshot.intent == .play
                 && phaseCanPlay
+                && !clientSideAdBreakIsActive
                 && audioInterruptionCoordinator.allowsPlaybackStart
 
             if appliedPlayback == desiredPlayback {
@@ -135,6 +146,23 @@ extension StreamPlayerController {
 
             if desiredPlayback {
                 guard await acquireAudioPlaybackFocus() else { return }
+
+                // Playback ownership may have changed while acquiring audio focus.
+                guard !isShutdown else { return }
+
+                guard commandGeneration == playbackCommandGeneration,
+                      sourceGeneration == loadGeneration else {
+                    appliedPlayback = nil
+                    continue
+                }
+
+                guard snapshot.adBreak?.deliveryMode != .clientSide,
+                      snapshot.intent == .play,
+                      audioInterruptionCoordinator.allowsPlaybackStart else {
+                    appliedPlayback = nil
+                    continue
+                }
+
                 do {
                     try await engine.play()
                     appliedPlayback = true

@@ -62,8 +62,13 @@ public final class StreamPictureInPictureController: NSObject, ObservableObject 
     @Published public private(set) var isPictureInPicturePossible = false
 
     /// Whether PiP is currently presenting this playback session.
-    @Published public private(set) var state: StreamPictureInPictureState = .idle
-
+    @Published public private(set) var state: StreamPictureInPictureState = .idle {
+        didSet {
+            playbackController?.setClientSideAdPictureInPictureActive(
+                state != .idle
+            )
+        }
+    }
     /// Whether the PiP window is active or completing its stop transition.
     public var isPictureInPictureActive: Bool {
         state == .active || state == .stopping

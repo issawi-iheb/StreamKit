@@ -19,6 +19,13 @@ public final class StreamPlayerController {
     /// The configuration used to create this player.
     public let configuration: PlayerConfiguration
 
+    /// The display container used for client-side advertisements.
+    ///
+    /// Attach `ClientSideAdContainerHost(container:)` to this player's
+    /// presentation hierarchy when using client-side advertising.
+ #if os(iOS)
+ public let clientSideAdContainer: ClientSideAdContainer
+ #endif
     /// The latest observable playback state.
     public internal(set) var snapshot: PlaybackSnapshot
 
@@ -77,6 +84,12 @@ public final class StreamPlayerController {
     var loadGeneration: UInt64 = 0
     /// Source generation that produced the active ad break, used for lifecycle diagnostics.
     var activeAdBreakLoadGeneration: UInt64?
+    /// Coordinates the client-side ad session for the current source.
+    var clientSideAdCoordinator: ClientSideAdCoordinator?
+    /// Generates unique, ordered client-side ad-break identifiers.
+    var clientSideAdBreakSequence: UInt64 = 0
+    /// The selected playback rate, retained across source replacements.
+    var selectedPlaybackRate: Float = 1.0
     /// Orders app playback commands across async engine calls.
     var playbackCommandGeneration: UInt64 = 0
     /// Prevents an older seek from committing after a newer seek completes.
@@ -105,6 +118,9 @@ public final class StreamPlayerController {
             keepsLiveTimelineCurrentWhilePaused: configuration.keepsLiveTimelineCurrentWhilePaused
         )
         self.configuration = configuration
+        #if os(iOS)
+        self.clientSideAdContainer = ClientSideAdContainer()
+        #endif
         self.engine = engine
         self.renderingPlayer = engine.renderingPlayer
         self.audioInterruptionSource = SystemAudioInterruptionSource()
@@ -124,6 +140,9 @@ public final class StreamPlayerController {
         audioPlaybackFocusCoordinator: AudioPlaybackFocusCoordinator? = nil
     ) {
         self.configuration = configuration
+#if os(iOS)
+self.clientSideAdContainer = ClientSideAdContainer()
+#endif
         self.engine = engine
         self.renderingPlayer = nil
         self.audioInterruptionSource = SystemAudioInterruptionSource()
@@ -144,6 +163,9 @@ public final class StreamPlayerController {
         audioPlaybackFocusCoordinator: AudioPlaybackFocusCoordinator? = nil
     ) {
         self.configuration = configuration
+#if os(iOS)
+self.clientSideAdContainer = ClientSideAdContainer()
+#endif
         self.engine = engine
         self.renderingPlayer = nil
         self.audioInterruptionSource = audioInterruptionSource

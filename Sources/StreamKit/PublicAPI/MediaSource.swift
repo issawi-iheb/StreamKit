@@ -21,14 +21,17 @@ public struct MediaSource: Equatable, Sendable {
     /// Caller-supplied playback semantics. StreamKit doesn't infer live
     /// playback from an indefinite duration or seekable ranges.
     public let presentationKind: MediaPresentationKind
+    public let adMode: MediaAdMode?
 
     public init(
         url: URL,
         requestConfiguration: MediaRequestConfiguration = .init(),
-        presentationKind: MediaPresentationKind = .unspecified
+        presentationKind: MediaPresentationKind = .unspecified,
+        adMode: MediaAdMode? = nil
     ) {
         self.url = url
         self.requestConfiguration = requestConfiguration
         self.presentationKind = presentationKind
+        self.adMode = adMode
     }
 }

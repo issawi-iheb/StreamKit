@@ -33,6 +33,7 @@ struct MediaSourceTests {
         #expect(source.requestConfiguration.userAgent == nil)
         #expect(source.requestConfiguration.fairPlay == nil)
         #expect(source.presentationKind == .unspecified)
+        #expect(source.adMode == nil)
     }
 
     @Test("Preserves explicit live presentation semantics")

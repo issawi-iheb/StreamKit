@@ -15,6 +15,7 @@ extension StreamPlayerController {
         let commandGeneration = playbackCommandGeneration
 
         audioInterruptionCoordinator.playbackIntentRequested()
+        clientSideAdCoordinator?.setUserPaused(false)
 
         let shouldRestartEndedItem = snapshot.phase == .ended
             && snapshot.duration.map { $0.isFinite && $0 >= 0 } == true
@@ -45,6 +46,11 @@ extension StreamPlayerController {
         case .ready, .paused, .waiting, .ended:
             updateIntent(.play)
         }
+        // Client-side ads own the presentation while their break is active.
+        // Preserve the user's play intent, but do not start the content engine.
+        if snapshot.adBreak?.deliveryMode == .clientSide {
+            return
+        }
 
         if audioInterruptionCoordinator.isInterrupted {
             // Keep the request. The interruption-end handler will retry if
@@ -71,7 +77,24 @@ extension StreamPlayerController {
             }
 
             guard await acquireAudioPlaybackFocus() else { return }
+            // Playback ownership may have changed while acquiring audio focus.
+            guard !isShutdown else {
+                throw shutdownFailure()
+            }
 
+            guard loadGeneration == generation else {
+                throw CancellationError()
+            }
+
+            guard playbackCommandGeneration == commandGeneration else {
+                return
+            }
+
+            guard snapshot.intent == .play,
+                  snapshot.adBreak?.deliveryMode != .clientSide,
+                  audioInterruptionCoordinator.allowsPlaybackStart else {
+                return
+            }
             try await engine.play()
 
             guard !isShutdown else {
@@ -129,6 +152,7 @@ extension StreamPlayerController {
         let commandGeneration = playbackCommandGeneration
 
         updateIntent(.pause)
+        clientSideAdCoordinator?.setUserPaused(true)
         audioPlaybackFocusCoordinator?.releaseFocus(for: self)
 
         await engine.pause()
@@ -178,11 +202,36 @@ extension StreamPlayerController {
             )
         }
 
+        if snapshot.adBreak?.deliveryMode == .clientSide,
+           snapshot.adBreak?.requiresPreferredPlaybackRate == true,
+           rate != selectedPlaybackRate {
+            throw PlaybackFailure(
+                code: .adPlaybackRestricted,
+                message: "The preferred playback rate cannot be changed during this ad break."
+            )
+        }
+
+        let previousRate = selectedPlaybackRate
+
         try await engine.setPlaybackRate(rate)
 
         guard !isShutdown else {
             throw shutdownFailure()
         }
+
+        // An ad break may have started while the engine operation was suspended.
+        if snapshot.adBreak?.deliveryMode == .clientSide,
+           snapshot.adBreak?.requiresPreferredPlaybackRate == true,
+           rate != previousRate {
+            try? await engine.setPlaybackRate(previousRate)
+
+            throw PlaybackFailure(
+                code: .adPlaybackRestricted,
+                message: "The preferred playback rate cannot be changed during this ad break."
+            )
+        }
+
+        selectedPlaybackRate = rate
     }
 
     /// Seeks to the specified position, in seconds.
@@ -200,7 +249,7 @@ extension StreamPlayerController {
                 message: "A ready media source is required to seek."
             )
         }
-
+        try validateClientSideForwardSeek(to: time)
         let generation = loadGeneration
         let seekGeneration = beginSeek()
 
@@ -259,6 +308,20 @@ extension StreamPlayerController {
             )
         }
 
+        if snapshot.adBreak?.deliveryMode == .clientSide,
+           snapshot.adBreak?.restrictsForwardSeeking == true {
+            guard let latestSeekableTime = snapshot.timeline.latestSeekableTime else {
+                throw PlaybackFailure(
+                    code: .adPlaybackRestricted,
+                    message: "Seeking to the live edge is restricted during this ad break."
+                )
+            }
+
+            try validateClientSideForwardSeek(
+                to: latestSeekableTime - offsetFromLive
+            )
+        }
+
         let generation = loadGeneration
         let seekGeneration = beginSeek()
         try await engine.seekToLiveEdge(offsetFromLive: offsetFromLive)
@@ -269,5 +332,29 @@ extension StreamPlayerController {
         else {
             throw CancellationError()
         }
+    }
+
+    private func validateClientSideForwardSeek(
+        to targetTime: TimeInterval
+    ) throws {
+        guard let adBreak = snapshot.adBreak,
+              adBreak.deliveryMode == .clientSide,
+              adBreak.restrictsForwardSeeking
+        else {
+            return
+        }
+
+        guard PlaybackInterstitialSeekPolicy.activeBreakRestrictsForwardSeek(
+            from: snapshot.currentTime,
+            to: targetTime,
+            restrictsForwardSeeking: true
+        ) else {
+            return
+        }
+
+        throw PlaybackFailure(
+            code: .adPlaybackRestricted,
+            message: "Forward seeking is restricted during this ad break."
+        )
     }
 }

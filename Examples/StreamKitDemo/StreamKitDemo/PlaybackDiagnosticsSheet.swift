@@ -188,6 +188,8 @@ private struct Entry: Identifiable {
             "Ad break ended (\(deliveryMode))"
         case let .adBreakInterrupted(deliveryMode):
             "Ad break interrupted (\(deliveryMode))"
+        case .clientSideAdFailed(_):
+            "Client-side ad failed"
         }
     }
 

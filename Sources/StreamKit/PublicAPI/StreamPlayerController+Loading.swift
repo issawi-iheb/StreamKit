@@ -28,6 +28,12 @@ extension StreamPlayerController {
 
             do {
                 try await engine.load(source, generation: generation)
+                try Task.checkCancellation()
+
+                try await configureClientSideAds(
+                    for: source,
+                    generation: generation
+                )
 
                 try Task.checkCancellation()
 
@@ -50,11 +56,19 @@ extension StreamPlayerController {
                         )
                     )
 
-                    if audioInterruptionCoordinator.allowsPlaybackStart {
+                    if audioInterruptionCoordinator.allowsPlaybackStart,
+                       snapshot.adBreak?.deliveryMode != .clientSide {
                         guard await acquireAudioPlaybackFocus() else { return }
+
+                        // The ad break may have started while acquiring audio focus.
+                        guard snapshot.adBreak?.deliveryMode != .clientSide else {
+                            return
+                        }
+
                         let commandGeneration = playbackCommandGeneration
                         autoplayCommandGeneration = commandGeneration
                         try await engine.play()
+
 
                         guard !isShutdown,
                               loadGeneration == generation
@@ -108,6 +122,7 @@ extension StreamPlayerController {
                         )
                     )
                 } else {
+                    invalidateClientSideAdSession(for: generation)
                     let failure = PlaybackFailureMapping.map(error)
 
                     updateSnapshot(
@@ -132,6 +147,7 @@ extension StreamPlayerController {
     private func beginLoading(
         presentationKind: MediaPresentationKind
     ) -> UInt64 {
+        invalidateClientSideAdSession()
         if snapshot.phase == .loading {
             publishDiagnostic(.loadCancelled(.replacedByNewSource))
         }

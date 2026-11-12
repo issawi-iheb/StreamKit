@@ -40,6 +40,17 @@ struct DemoHomeView: View {
                         .accessibilityIdentifier("demo.hls-interstitial-ads")
 
                         NavigationLink {
+                            IMAVASTDemoView()
+                        } label: {
+                            DemoNavigationCard(
+                                title: "Google IMA · VAST",
+                                subtitle: "Test client-side preroll ads with Google's IMA SDK.",
+                                symbol: "rectangle.stack.badge.play"
+                            )
+                        }
+                        .accessibilityIdentifier("demo.google-ima-vast")
+
+                        NavigationLink {
                             LiveDVRDemoView()
                         } label: {
                             DemoNavigationCard(

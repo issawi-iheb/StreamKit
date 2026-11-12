@@ -47,7 +47,7 @@ extension StreamPlayerController {
             }
 
             publishDiagnostic(.audioInterruptionBegan)
-
+            clientSideAdCoordinator?.setAudioInterrupted(true)
             await engine.pause()
 
             switch snapshot.phase {
@@ -63,6 +63,7 @@ extension StreamPlayerController {
                 automaticallyResumes: configuration.automaticallyResumesAfterAudioInterruption,
                 snapshot: snapshot
             )
+            clientSideAdCoordinator?.setAudioInterrupted(false)
             publishDiagnostic(
                 .audioInterruptionEnded(
                     systemAllowsResume: systemAllowsResume,
@@ -153,5 +154,8 @@ extension StreamPlayerController {
             return
         }
         updateSnapshot(newSnapshot)
+        if case .ended = event {
+            clientSideAdCoordinator?.contentDidFinish()
+        }
     }
 }

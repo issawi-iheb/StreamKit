@@ -264,4 +264,383 @@ struct PlaybackAdBreakTests {
 
         await engine.shutdown()
     }
+
+    @Test("Client-side ad break prevents content playback from starting")
+    func clientSideAdBreakPreventsContentPlayback() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        let adBreak = PlaybackAdBreakState(
+            deliveryMode: .clientSide,
+            sequence: 1,
+            restrictsForwardSeeking: true,
+            requiresPreferredPlaybackRate: true
+        )
+
+        controller.updateAdBreak(adBreak)
+
+        try await controller.play()
+
+        #expect(controller.snapshot.intent == .play)
+        #expect(controller.snapshot.adBreak == adBreak)
+        #expect(engine.playCallCount == 0)
+        #expect(!engine.isPlaying)
+
+        await controller.shutdown()
+    }
+
+    @Test("Client-side ad break preserves the selected playback rate")
+    @MainActor
+    func clientSideAdBreakRestrictsPlaybackRateChanges() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        try await controller.setPlaybackRate(1.5)
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        let adBreak = PlaybackAdBreakState(
+            deliveryMode: .clientSide,
+            sequence: 1,
+            restrictsForwardSeeking: true,
+            requiresPreferredPlaybackRate: true
+        )
+        controller.updateAdBreak(adBreak)
+
+        // The selected rate remains valid.
+        try await controller.setPlaybackRate(1.5)
+        #expect(engine.playbackRate == 1.5)
+
+        // A different rate must be rejected.
+        do {
+            try await controller.setPlaybackRate(2.0)
+            Issue.record("Expected playback-rate change to be rejected.")
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .adPlaybackRestricted)
+        }
+
+        #expect(engine.playbackRate == 1.5)
+
+        await controller.shutdown()
+    }
+
+    @Test("Client-side ad break blocks forward seeks but allows backward seeks")
+    @MainActor
+    func clientSideAdBreakRestrictsForwardSeeking() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        controller.updateSnapshot(
+            PlaybackSnapshot(
+                phase: .ready,
+                intent: .pause,
+                currentTime: 30,
+                duration: 300
+            )
+        )
+
+        controller.updateAdBreak(
+            PlaybackAdBreakState(
+                deliveryMode: .clientSide,
+                sequence: 1,
+                restrictsForwardSeeking: true,
+                requiresPreferredPlaybackRate: true
+            )
+        )
+
+        // Forward seek must be rejected before reaching the engine.
+        do {
+            try await controller.seek(to: 60)
+            Issue.record("Expected forward seek to be rejected.")
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .adPlaybackRestricted)
+        }
+
+        #expect(engine.seekTimes.isEmpty)
+
+        // Backward seek remains available.
+        let backwardSeek = Task {
+            try await controller.seek(to: 10)
+        }
+
+        await engine.waitForSeek(id: 1)
+        #expect(engine.seekTimes == [10])
+
+        engine.completeSeek(id: 1)
+        try await backwardSeek.value
+
+        await controller.shutdown()
+    }
+
+    @Test("Client-side ad break blocks forward live-edge seeking")
+    @MainActor
+    func clientSideAdBreakRestrictsLiveEdgeSeeking() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(
+                url: URL(string: "https://example.com/live.m3u8")!,
+                presentationKind: .live
+            )
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        controller.updateSnapshot(
+            PlaybackSnapshot(
+                phase: .ready,
+                intent: .pause,
+                currentTime: 100,
+                timeline: PlaybackTimeline(
+                    seekableRanges: [
+                        PlaybackTimeRange(start: 50, end: 200)
+                    ],
+                    presentationKind: .live
+                )
+            )
+        )
+
+        controller.updateAdBreak(
+            PlaybackAdBreakState(
+                deliveryMode: .clientSide,
+                sequence: 1,
+                restrictsForwardSeeking: true,
+                requiresPreferredPlaybackRate: true
+            )
+        )
+
+        do {
+            try await controller.seekToLiveEdge(offsetFromLive: 10)
+            Issue.record("Expected forward live-edge seek to be rejected.")
+        } catch let failure as PlaybackFailure {
+            #expect(failure.code == .adPlaybackRestricted)
+        }
+
+        #expect(engine.liveEdgeSeekOffsets.isEmpty)
+
+        await controller.shutdown()
+    }
+
+    @Test("HLS interstitial does not block content engine playback")
+    func hlsInterstitialAllowsContentEnginePlayback() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        let adBreak = PlaybackAdBreakState(
+            deliveryMode: .hlsInterstitial,
+            sequence: 1,
+            restrictsForwardSeeking: true,
+            requiresPreferredPlaybackRate: true
+        )
+
+        controller.updateAdBreak(adBreak)
+
+        try await controller.play()
+
+        #expect(controller.snapshot.adBreak == adBreak)
+        #expect(engine.playCallCount == 1)
+        #expect(engine.isPlaying)
+
+        await controller.shutdown()
+    }
+
+    @Test("Autoplay does not start content while a client-side ad break is active")
+    func autoplayWaitsWhileClientSideAdBreakIsActive() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: true),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+
+        // Wait until the content load is in flight.
+        await engine.waitForLoad(id: 1)
+
+        let adBreak = PlaybackAdBreakState(
+            deliveryMode: .clientSide,
+            sequence: 1,
+            restrictsForwardSeeking: true,
+            requiresPreferredPlaybackRate: true
+        )
+
+        // Simulate the ad coordinator activating a pre-roll break
+        // before the content load completes.
+        controller.updateAdBreak(adBreak)
+
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        #expect(controller.snapshot.phase == .ready)
+        #expect(controller.snapshot.intent == .play)
+        #expect(controller.snapshot.adBreak == adBreak)
+        #expect(engine.playCallCount == 0)
+        #expect(!engine.isPlaying)
+
+        await controller.shutdown()
+    }
+
+    @Test("Activating a client-side ad break interrupts an in-flight content play")
+    func clientSideAdBreakInterruptsInFlightPlay() async throws {
+        let engine = MockPlaybackEngine()
+        let controller = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engine
+        )
+
+        let load = controller.load(
+            MediaSource(url: URL(string: "https://example.com/video.m3u8")!)
+        )
+        await engine.waitForLoad(id: 1)
+        engine.completeLoad(id: 1)
+        try await load.waitUntilReady()
+
+        // Hold the engine's play operation before it completes.
+        engine.suspendNextPlay()
+
+        let playTask = Task {
+            try await controller.play()
+        }
+
+        await engine.waitForPendingPlay()
+
+        let adBreak = PlaybackAdBreakState(
+            deliveryMode: .clientSide,
+            sequence: 1,
+            restrictsForwardSeeking: true,
+            requiresPreferredPlaybackRate: true
+        )
+
+        // Activate the ad while content playback is still in flight.
+        controller.updateAdBreak(adBreak)
+
+        engine.completePendingPlay()
+        try await playTask.value
+
+        #expect(controller.snapshot.adBreak == adBreak)
+        #expect(controller.snapshot.intent == .play)
+        #expect(!engine.isPlaying)
+        #expect(engine.pauseCallCount >= 1)
+
+        await controller.shutdown()
+    }
+
+    @Test("Client-side ad break prevents playback after waiting for shared audio focus")
+    func clientSideAdBreakWinsDuringAudioFocusAcquisition() async throws {
+        let focusCoordinator = AudioPlaybackFocusCoordinator()
+
+        let engineA = MockPlaybackEngine()
+        let controllerA = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engineA,
+            audioPlaybackFocusCoordinator: focusCoordinator
+        )
+
+        let engineB = MockPlaybackEngine()
+        let controllerB = StreamPlayerController(
+            configuration: PlayerConfiguration(autoplay: false),
+            engine: engineB,
+            audioPlaybackFocusCoordinator: focusCoordinator
+        )
+
+        // Load both players.
+        let loadA = controllerA.load(
+            MediaSource(url: URL(string: "https://example.com/player-a.m3u8")!)
+        )
+        await engineA.waitForLoad(id: 1)
+        engineA.completeLoad(id: 1)
+        try await loadA.waitUntilReady()
+
+        let loadB = controllerB.load(
+            MediaSource(url: URL(string: "https://example.com/player-b.m3u8")!)
+        )
+        await engineB.waitForLoad(id: 1)
+        engineB.completeLoad(id: 1)
+        try await loadB.waitUntilReady()
+
+        // Player A acquires and owns shared audio focus.
+        try await controllerA.play()
+
+        #expect(engineA.isPlaying)
+        #expect(engineA.playCallCount == 1)
+
+        // Player B requests focus. Its request suspends while A is pausing.
+        engineA.suspendNextPause()
+
+        let playTask = Task {
+            try await controllerB.play()
+        }
+
+        await engineA.waitForPendingPause()
+
+        // The ad break starts while B is waiting for A to pause.
+        let adBreak = PlaybackAdBreakState(
+            deliveryMode: .clientSide,
+            sequence: 1,
+            restrictsForwardSeeking: true,
+            requiresPreferredPlaybackRate: true
+        )
+
+        controllerB.updateAdBreak(adBreak)
+
+        // Allow A's pause to complete, so B can finish acquiring focus.
+        engineA.completePendingPause()
+
+        try await playTask.value
+
+        #expect(!engineA.isPlaying)
+        #expect(controllerB.snapshot.intent == .play)
+        #expect(controllerB.snapshot.adBreak == adBreak)
+        #expect(engineB.playCallCount == 0)
+        #expect(!engineB.isPlaying)
+
+        await controllerA.shutdown()
+        await controllerB.shutdown()
+    }
+
 }

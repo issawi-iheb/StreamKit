@@ -22,6 +22,7 @@ public struct PlaybackDiagnosticEvent: Equatable, Sendable {
         case adBreakBegan(PlaybackAdDeliveryMode)
         case adBreakEnded(PlaybackAdDeliveryMode)
         case adBreakInterrupted(PlaybackAdDeliveryMode)
+        case clientSideAdFailed(ClientSideAdFailure.Code)
     }
 
     /// Why the active source load was cancelled.

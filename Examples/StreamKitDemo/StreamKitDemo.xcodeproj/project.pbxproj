@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		785DEA9E30A4D8AA000ED5D9 /* StreamKitIMA in Frameworks */ = {isa = PBXBuildFile; productRef = 785DEA9D30A4D8AA000ED5D9 /* StreamKitIMA */; };
 		78F7B3F2307E8CB6001495B2 /* StreamKit in Frameworks */ = {isa = PBXBuildFile; productRef = 78F7B3F1307E8CB6001495B2 /* StreamKit */; };
 /* End PBXBuildFile section */
 
@@ -56,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				78F7B3F2307E8CB6001495B2 /* StreamKit in Frameworks */,
+				785DEA9E30A4D8AA000ED5D9 /* StreamKitIMA in Frameworks */,
 			);
 		};
 		78F7B3D1307E8B4F001495B2 /* Frameworks */ = {
@@ -118,6 +120,7 @@
 			name = StreamKitDemo;
 			packageProductDependencies = (
 				78F7B3F1307E8CB6001495B2 /* StreamKit */,
+				785DEA9D30A4D8AA000ED5D9 /* StreamKitIMA */,
 			);
 			productName = StreamKitDemo;
 			productReference = 78F7B3C7307E8B4D001495B2 /* StreamKitDemo.app */;
@@ -204,6 +207,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				78F7B3EF307E8C3D001495B2 /* XCLocalSwiftPackageReference "../../../StreamKit" */,
+				785DEA9C30A4D810000ED5D9 /* XCLocalSwiftPackageReference "../../../StreamKitIMA" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 78F7B3C8307E8B4D001495B2 /* Products */;
@@ -568,6 +572,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		785DEA9C30A4D810000ED5D9 /* XCLocalSwiftPackageReference "../../../StreamKitIMA" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../../StreamKitIMA;
+		};
 		78F7B3EF307E8C3D001495B2 /* XCLocalSwiftPackageReference "../../../StreamKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../../StreamKit;
@@ -575,6 +583,11 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		785DEA9D30A4D8AA000ED5D9 /* StreamKitIMA */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 785DEA9C30A4D810000ED5D9 /* XCLocalSwiftPackageReference "../../../StreamKitIMA" */;
+			productName = StreamKitIMA;
+		};
 		78F7B3F1307E8CB6001495B2 /* StreamKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 78F7B3EF307E8C3D001495B2 /* XCLocalSwiftPackageReference "../../../StreamKit" */;

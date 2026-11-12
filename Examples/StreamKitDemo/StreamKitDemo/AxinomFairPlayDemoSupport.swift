@@ -183,6 +183,8 @@ final class FairPlayDemoDiagnostics {
             message = "Ad break ended (\(deliveryMode))"
         case let .adBreakInterrupted(deliveryMode):
             message = "Ad break interrupted (\(deliveryMode))"
+        case .clientSideAdFailed(_):
+            message = "Client-side ad failed"
         }
 
         return "[\(time)] #\(event.sequence) load \(event.loadGeneration): \(message)"

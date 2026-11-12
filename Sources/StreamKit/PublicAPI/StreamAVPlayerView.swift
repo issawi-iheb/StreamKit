@@ -14,8 +14,13 @@ import UIKit
 /// Retain it outside the player screen so it survives SwiftUI view removal.
 @MainActor
 public final class StreamAVPlayerPresentationController: NSObject, ObservableObject {
-    @Published public private(set) var state: StreamPictureInPictureState = .idle
-
+    @Published public private(set) var state: StreamPictureInPictureState = .idle {
+        didSet {
+            playbackController?.setClientSideAdPictureInPictureActive(
+                state != .idle
+            )
+        }
+    }
     public var restorationHandler: StreamPictureInPictureRestorationHandler
 
     private weak var mountedViewController: AVPlayerViewController?

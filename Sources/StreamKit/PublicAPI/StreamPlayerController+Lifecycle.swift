@@ -22,6 +22,7 @@ extension StreamPlayerController {
         }
 
         isShutdown = true
+        invalidateClientSideAdSession()
         if snapshot.phase == .loading {
             publishDiagnostic(.loadCancelled(.shutdown))
         }
