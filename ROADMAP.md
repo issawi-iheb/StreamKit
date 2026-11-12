@@ -1,5 +1,7 @@
 # StreamKit Roadmap
 
+> **Current code status — 2026-11-12:** Advertising has a provider-neutral client-side contract, an optional Google IMA adapter, and a separate HLS interstitial path. The focused fullscreen-exit issue is fixed locally and passed on iPhone 12 / iOS 27.0.1 against the local package; the demo's remote StreamKit pin does not include the fix yet. Ad-provider/surface acceptance, a post-await seek/ad-break race, and raw IMA error logging remain open. See [the current branch code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) and [advertising architecture](Documentation/Architecture.md#advertising-architecture).
+
 ## PROJECT GOAL
 
 StreamKit is a reusable, production-grade iOS media-player SDK built on
@@ -32,7 +34,7 @@ separate integration boundaries for DRM and advertising.
 - Public API stability and supported capability boundaries are documented.
 
 ### Product decisions and deferred capabilities
-- Ads: both HLS interstitials and client-side ads are in scope across managed, advanced, and AVKit paths. See [Advertising Integration Plan](Documentation/AdvertisingPlan.md); select the client-side provider before defining its public adapter API.
+- Ads: HLS interstitials and provider-neutral client-side ads are implemented; Google IMA is supplied by the optional `StreamKitIMA` adapter. Real-provider acceptance and the remaining lifecycle/security findings are tracked in the [current code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md).
 - Offline playback: scope downloads, storage policy, persistent FairPlay keys, and renewal together; do not treat offline keys as a small extension to online FairPlay.
 - Playlists, cross-platform backends, and vendor analytics integrations remain separate proposals until product requirements justify them.
 
@@ -123,16 +125,20 @@ separate integration boundaries for DRM and advertising.
 
 ## PHASE 4 — Advertising
 
-### OPEN DEVICE ISSUE
-- **Device verification pending** — On the current ads branch, playback pauses after exiting native AVKit fullscreen on Managed and AVKit, for both HLS interstitial and ordinary streams; the user reports it worked on `main`. The standalone custom-player fullscreen flow continues playback. The ads-only AVKit policy bridge is temporarily reverted to the `main` implementation to isolate the regression; AVKit's ad-specific seek restriction is disabled during this check. Verify fullscreen exit on device before restoring that behavior.
+### CURRENT IMPLEMENTATION STATUS
+- **Implemented** — Core provider-neutral client-side ad contracts and per-controller session coordination.
+- **Implemented** — Optional `StreamKitIMA` Google IMA adapter with a separate IMA loader/manager session per player.
+- **Implemented** — HLS interstitial event monitoring through AVFoundation, separate from client-side providers.
+- **Locally fixed and device-verified** — AVKit fullscreen exit playback; focused regression test passed on iPhone 12 / iOS 27.0.1 against local StreamKit. The current remote dependency pin does not yet contain the fix.
+- **Open** — Provider/device acceptance across surfaces, concurrent sessions, failure/timeout/replacement, and HLS interstitial transitions. See current audit.
 
 ### ACCEPTANCE CRITERIA:
-- Ad playback works through the managed, advanced (`StreamPlayerController` + `StreamVideoView`), and AVKit (`StreamAVPlayerView`) paths.
-- HLS interstitial and client-side ad integration boundaries defined
-- Ad playback events and transitions modeled
-- Seeking restrictions and ad-break behavior defined
-- Provider integrations implemented and tested
-- Regression tests for ad playback scenarios
+- **Implemented; acceptance incomplete** — Managed retained-session, advanced (`StreamPlayerController` + `StreamVideoView`), and AVKit (`StreamAVPlayerView`) integration paths exist. Real ad playback across every path still needs verification.
+- **Implemented** — HLS interstitial and client-side ad integration boundaries are separate and defined.
+- **Implemented** — Ad playback events and transitions are modeled.
+- **Partially verified** — Seeking restrictions and ad-break behavior are defined; a post-await seek/ad-break race remains open.
+- **Implemented; acceptance incomplete** — Optional Google IMA provider exists; real-provider lifecycle, concurrency, and failure-path acceptance remains open.
+- **Open** — Broader ad regression tests for timeout, failure, replacement, concurrency, surfaces, and HLS transitions.
 
 ## PHASE 5 — Advanced playback and presentation
 
@@ -173,5 +179,5 @@ separate integration boundaries for DRM and advertising.
 - **Latest repository commit**: `9957a6b` (`Document demo routes and architecture visuals`) on `main`. The latest code implementation baseline is `23fede9` (`Polish demo player visual consistency`).
 - **Current phase**: Phase 3 — normalized lifecycle diagnostics and iOS 18+ AVMetrics enrichment are implemented. Analytics-provider integrations remain deferred. Shared diagnostics UI is available on managed, custom-controls, and AVKit/PiP routes; FairPlay has its own request report. Additional example routes remain to be wired. Phase 1 production-readiness and Phase 2 provider-specific acceptance gaps remain open.
 - **Latest local verification (2026-10-28)**: The StreamKit demo builds for the generic iOS Simulator destination. CoreSimulator was unavailable for runtime visual inspection in the latest pass; no new screenshot or device verification is claimed here.
-- **Current audit**: [PRODUCTION_READINESS_AUDIT.md](PRODUCTION_READINESS_AUDIT.md) includes the 2026-10-19 full SDK reassessment and the 2026-10-20 architecture and SDK comparison. StreamKit is not yet production-ready against Phase 1 criteria.
+- **Current audit**: [AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) is the single current source-based audit. Production-readiness work remains open as listed in that report.
 - **Next milestone**: Complete the Reliability and developer observability target above. Ads and offline playback remain product decisions, not assumed feature-parity commitments.

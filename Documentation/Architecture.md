@@ -34,6 +34,8 @@ The demo uses separate routes for integration examples. These screens share page
 | Audio & background | Playback with interruption-policy explanation and test notification actions. |
 | Bearer authentication | Protected media setup and trusted-host/token inputs before playback. |
 | FairPlay Streaming | FairPlay setup, player status, and provider request diagnostics. |
+| HLS interstitials | AVFoundation interstitial delivery with selectable player presentation. |
+| IMA / VAST ads | Client-side provider integration with an explicit per-player ad display host. |
 
 `DemoScrollContainer`, `DemoPanel`, `DemoPlaybackActions`, and the shared action styles provide common layout and interaction patterns for scrollable examples. The managed AVKit route and fullscreen surfaces intentionally keep their player-specific presentation. Playback diagnostics currently have shared panel styling on managed, custom-controls, and AVKit/PiP routes; FairPlay has a provider-specific request report. Expanding the shared diagnostics entry point to Live/DVR, multiple players, audio, and bearer examples remains a demo follow-up.
 
@@ -149,14 +151,14 @@ flowchart LR
     Engine --> Snapshots[Playback snapshots]
     Controller --> Snapshots
     Controller -->|same AVPlayer output| CustomView[StreamVideoView and app-owned controls]
-    Host -->|retains for playback session| CustomPiP[StreamPictureInPictureController]
+    App -->|retains for playback session| CustomPiP[StreamPictureInPictureController]
     CustomPiP -->|owns PiP transition and source layer| CustomView
     Controller -->|same AVPlayer output| SystemView[StreamAVPlayerView using AVPlayerViewController]
     Session -->|owns with the session| SystemPiP[StreamAVPlayerPresentationController]
-    Host -->|retains session above route for cross-route PiP| Session
-    Host -->|retains for direct AVKit integration| SystemPiP
+    App -->|retains session above route for cross-route PiP| Session
+    App -->|retains for direct AVKit integration| SystemPiP
     SystemPiP -->|delegate and restoration lifecycle| SystemView
-    SystemPiP -->|restore route before completion| Host
+    SystemPiP -->|restore route before completion| App
     KeySession -. redacted key result .-> Diagnostics[Optional host diagnostics]
 ```
 
@@ -165,6 +167,37 @@ The diagram shows ownership and data flow, not a deployment topology. FairPlay c
 `StreamVideoView` renders a controller into an `AVPlayerLayer` for app-owned controls. A `StreamPictureInPictureController` coordinates PiP for those custom surfaces; share one instance across views rendering the same controller, and start PiP in response to a user action. The host must retain both controllers in an owner that outlives the player route while PiP is active. The PiP controller retains the source layer until AVKit reports stop or failed start. `try await stopAndWaitUntilStopped()` is the shutdown barrier: await it before shutting down or replacing the playback controller. If the wait is cancelled, it throws while AVKit continues the stop request; retain playback and wait again before shutdown.
 
 `StreamAVPlayerView` is an AVKit-backed surface that provides Apple's standard controls and system PiP/AirPlay affordances where supported. `StreamPlayerSession` is the managed facade: it creates the controller, loads the supplied source, publishes snapshots, and owns the AVKit presentation controller. `StreamPlayerView` renders that session. Its `shutdown()` waits for PiP to finish before releasing playback. Retain the session above the player route if playback or PiP must survive route removal. Supply a restoration handler when the host needs to restore its navigation route; the default reports that no restoration occurred. For custom controls, use `StreamPlayerController` and `StreamVideoView` directly. The host owns process-wide audio-session configuration and the app's `audio` background mode.
+
+## Advertising architecture
+
+Client-side advertising and HLS interstitials are separate delivery paths. The client-side contracts live in core; provider SDKs live in optional adapter packages. `StreamKitIMA` adapts Google IMA and is not a dependency of the core `StreamKit` product.
+
+```mermaid
+flowchart TB
+    HostApp[Host app] -->|creates and retains when needed| ManagedSession[StreamPlayerSession]
+    ManagedSession -->|owns| Controller[StreamPlayerController]
+    HostApp -->|configures MediaSource| Controller
+    HostApp -->|mounts explicitly| AdHost[ClientSideAdContainerHost]
+    Controller -->|owns per player| AdContainer[ClientSideAdContainer]
+    AdHost -->|attaches to| AdContainer
+    Controller -->|calls for each client-side source load| Provider[GoogleIMAAdProvider in StreamKitIMA]
+    Provider -->|creates independent session| IMASession[GoogleIMAAdSession]
+    IMASession -. conforms to .-> Contract[ClientSideAdSession]
+    IMASession -->|emits break events| Controller
+    IMASession -->|binds player and display container| IMASDK[Google IMA SDK]
+    AdContainer -->|renders over content| Surface[Player surface]
+    Controller -->|same AVPlayer| Surface
+    Surface --> Video[StreamVideoView]
+    Surface --> AVKit[StreamAVPlayerView]
+    Surface --> Managed[StreamPlayerView using retained StreamPlayerSession]
+    HLS[HLS interstitial metadata] -->|AVFoundation event monitor| Controller
+```
+
+`StreamPlayerSession` constructs and owns its `StreamPlayerController`; the controller owns its `ClientSideAdContainer` and coordinates the provider session for that player's active source. The host app must mount `ClientSideAdContainerHost(container:)` in the view hierarchy alongside the matching surface. The SDK does not insert this host automatically. A managed `StreamPlayerView(source:)` hides its internally created session, so client-side ads with the managed surface require the retained-session initializer, `StreamPlayerView(session:)`, to mount the corresponding ad host.
+
+The IMA adapter waits for the container to become displayable, then creates an IMA display container from the host view and view controller and binds the ad playhead to that player's `AVPlayer`. This gives concurrent players separate IMA loaders/managers and separate display containers. Source replacement invalidates the previous session through controller lifecycle handling. The provider adapter currently logs some vendor diagnostics; raw IMA error messages can include request or response details and should be redacted before production logging.
+
+HLS interstitials do not pass through `ClientSideAdProvider` or `StreamKitIMA`. AVFoundation observes interstitial events from the HLS item, and StreamKit maps them into common ad-break state. The demo exposes both routes; ad-tag/device/lifecycle coverage remains narrower than the implementation surface.
 
 ### Managed-player feature coverage and ownership
 

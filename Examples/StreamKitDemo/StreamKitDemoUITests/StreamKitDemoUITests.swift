@@ -53,7 +53,7 @@ final class StreamKitDemoUITests: XCTestCase {
 
         app.buttons["demo.audio-session"].tap()
 
-        XCTAssertTrue(app.staticTexts["Audio session and interruption handling"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Sessions & interruptions"].waitForExistence(timeout: 3))
         XCTAssertTrue(
             app.descendants(matching: .any)
                 .matching(identifier: "audio-session-playback-phase")
@@ -80,9 +80,8 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["demo.presentation-avkit-pip"].tap()
-
-        XCTAssertTrue(app.staticTexts["StreamKit Player and Picture in Picture"].waitForExistence(timeout: 3))
+        scrollToMenuEntry("demo.presentation-avkit-pip", in: app).tap()
+        XCTAssertTrue(app.staticTexts["Picture in Picture"].waitForExistence(timeout: 5))
         XCTAssertTrue(
             app.descendants(matching: .any)
                 .matching(identifier: "presentation-renderer-picker")
@@ -101,14 +100,15 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["demo.presentation-avkit-pip"].tap()
+        scrollToMenuEntry("demo.presentation-avkit-pip", in: app).tap()
         let playerInterface = app.staticTexts["presentation-player-interface-ready"]
         XCTAssertTrue(playerInterface.waitForExistence(timeout: 5))
 
         app.navigationBars.buttons["StreamKit"].tap()
-        let presentationEntry = app.buttons["demo.presentation-avkit-pip"]
-        XCTAssertTrue(presentationEntry.waitForExistence(timeout: 5))
-
+        let presentationEntry = scrollToMenuEntry(
+            "demo.presentation-avkit-pip",
+            in: app
+        )
         presentationEntry.tap()
         XCTAssertTrue(playerInterface.waitForExistence(timeout: 5))
     }
@@ -118,7 +118,7 @@ final class StreamKitDemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        app.buttons["demo.presentation-avkit-pip"].tap()
+        scrollToMenuEntry("demo.presentation-avkit-pip", in: app).tap()
         XCTAssertTrue(
             app.staticTexts["presentation-player-interface-ready"]
                 .waitForExistence(timeout: 5)
@@ -217,6 +217,11 @@ final class StreamKitDemoUITests: XCTestCase {
 
         XCTAssertTrue(app.navigationBars["Managed Player"].waitForExistence(timeout: 10))
 
+        let returnedPlayerSurface = app.otherElements["Video"]
+        XCTAssertTrue(returnedPlayerSurface.waitForExistence(timeout: 10), app.debugDescription)
+        returnedPlayerSurface.tap()
+        XCTAssertTrue(app.buttons["Pause"].waitForExistence(timeout: 15), app.debugDescription)
+
         app.buttons["managed.back-to-menu"].tap()
         XCTAssertTrue(app.buttons["demo.managed-player"].waitForExistence(timeout: 10))
     }
@@ -297,5 +302,32 @@ final class StreamKitDemoUITests: XCTestCase {
         }
         XCTAssertTrue(entry.isHittable, "Expected menu entry \(identifier) to be visible after scrolling")
         entry.tap()
+    }
+
+    @MainActor
+    private func scrollToMenuEntry(
+        _ identifier: String,
+        in app: XCUIApplication
+    ) -> XCUIElement {
+        let entry = app.buttons[identifier]
+
+        for _ in 0..<8 {
+            if entry.exists && entry.isHittable {
+                return entry
+            }
+
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(
+            entry.waitForExistence(timeout: 3),
+            "Menu entry \(identifier) was not found."
+        )
+        XCTAssertTrue(
+            entry.isHittable,
+            "Menu entry \(identifier) is not hittable after scrolling."
+        )
+
+        return entry
     }
 }

@@ -42,6 +42,8 @@ The demo keeps the integration paths distinct while sharing a consistent visual 
 | Audio & background | Interruption policy, playback intent, and simulated interruption notifications. |
 | Bearer authentication | HTTPS media URL, trusted hosts, and optional bearer token setup. |
 | FairPlay Streaming | Axinom test configuration, protected playback, and FairPlay request diagnostics. |
+| HLS interstitials | AVFoundation-managed HLS interstitial events and the selected player surface. |
+| IMA / VAST ads | Optional `StreamKitIMA` provider, with an ad container mounted over the matching player. |
 
 The screenshots below are also embedded in the [architecture overview](Documentation/Architecture.md#demo-screens-and-visual-language), alongside the route and component ownership map.
 
@@ -56,7 +58,7 @@ These are captures from the StreamKit demo running in the iPhone Duo simulator. 
   </tr>
 </table>
 
-The managed-player screenshot was captured by the passing `testManagedPlayerCanEnterAndExitFullscreen` UI test. The test build and capture used the iOS 27.1 iPhone Duo simulator; see [the current validation note](AUDIT_REPORTS/12_CURRENT_STATE_AND_DEMO_UX.md).
+The managed-player screenshot was captured by a passing `testManagedPlayerCanEnterAndExitFullscreen` UI test on the iOS 27.1 iPhone Duo simulator. For the current fullscreen-exit device result and its limits, see the [current branch code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md).
 
 ## Quick Start
 
@@ -553,6 +555,14 @@ try await handle.waitUntilReady()
 
 See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for the provider contract and request lifecycle. The example above passes FairPlay through the managed player; the demo's dedicated Axinom screen demonstrates the same provider contract using lower-level controller APIs so the request lifecycle and diagnostics remain visible. Its public protected HLS vector is preconfigured. A user-provided live run confirmed HTTP 200 from the license endpoint, AVFoundation key acceptance, and playback reaching `.playing`. The token is included in the demo source and compiled sample solely for Axinom's public test asset; do not put production tokens in source. You can enter your own tenant values at runtime. Diagnostics omit the token and DRM payloads. This is an evaluation harness, not production credential management: use your app-approved FPS certificate and secure entitlement/token flow in production. End-to-end renewal and real entitlement-rejection behavior require provider-issued test materials. Package tests simulate provider rejection/network errors, empty CKC, cancellation, and public-error redaction; they do not simulate HTTP parsing, AVFoundation key challenges, or real renewal. Offline/persistable keys are not supported. If the HLS origin also needs bearer authorization, configure that separately; FairPlay license-server authentication remains the provider's responsibility.
 
+## Advertising
+
+Core StreamKit has provider-neutral client-side ad contracts and a separate HLS interstitial path. Client-side requests are configured on `MediaSource` with `MediaAdMode.clientSide`; an app can supply an adapter implementing `ClientSideAdProvider`. HLS-timed interstitials use `MediaAdMode.hlsInterstitials` and AVFoundation's interstitial event support.
+
+Google IMA is an optional package, [`StreamKitIMA`](https://github.com/issawi-iheb/StreamKitIMA), so the core `StreamKit` package does not depend on Google IMA. The adapter creates an independent IMA loader/manager session per player source load. On iOS, mount `ClientSideAdContainerHost(container:)` as an overlay alongside the corresponding player surface. The same explicit host works with `StreamVideoView`, `StreamAVPlayerView`, and `StreamPlayerView(session:)`; managed `StreamPlayerView(source:)` does not expose the controller's ad container for this integration, so retain a `StreamPlayerSession` and use `StreamPlayerView(session:)` when client-side ads are enabled.
+
+See the [advertising architecture](Documentation/Architecture.md#advertising-architecture) and the [IMA/VAST demo route](Examples/StreamKitDemo/).
+
 ## Documentation
 
 - [Architecture Overview](Documentation/Architecture.md) - Core design principles
@@ -560,6 +570,7 @@ See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for t
 - [Playback State Machine](Documentation/PlaybackStateMachine.md) - Intent vs Phase details
 - [Multi-Player Architecture](Documentation/MultiPlayerArchitecture.md) - Instance isolation
 - [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) - Provider contract and protected HLS flow
+- [Current Branch Code Audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) - Current findings, fixed status, and validation limits
 - [Demo Application](Examples/StreamKitDemo/) - Complete integration examples
 
 ## Current Limitations
@@ -567,7 +578,7 @@ See [FairPlay Streaming Integration](Documentation/FairPlayIntegration.md) for t
 - iOS only (no macOS/tvOS/watchOS support)
 - AVFoundation-based playback only
 - No StreamKit-designed custom controls; use the managed AVKit view or build app-owned controls with `StreamVideoView`
-- No advertising; the public Axinom FairPlay vector is verified, while customer-provider renewal and failure scenarios remain unverified
+- No ad vendor dependency in core. HLS interstitial monitoring and provider-neutral client-side orchestration are implemented; Google IMA is an optional package. Real ad-tag, provider lifecycle, and per-surface acceptance still require broader verification.
 - StreamKit does not provide a full playback-controls UI or set a package-wide orientation policy. Pair `StreamVideoView` with `StreamPictureInPictureController` for app-owned controls, or use `StreamAVPlayerView` for AVKit's standard controls. The demo requests landscape for its custom fullscreen mode.
 - Offline playback requires application-level file handling
 
@@ -584,9 +595,10 @@ See the [StreamKitDemo](Examples/StreamKitDemo/) target for a complete example s
 - Dedicated Axinom public FairPlay test vector and provider-integration guide
 - Audio-session interruption recovery and background audio setup
 - AVKit system controls, Picture in Picture, AirPlay affordances, and custom fullscreen landscape behavior
+- HLS interstitial and optional Google IMA / VAST integration routes
 
 The demo's separate **Protected Playback** section is prefilled with a public Mux HLS sample (`https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`) and its trusted host. Leave the token blank to check ordinary HLS playback. To exercise bearer authentication, replace the URL and trusted-host list with a protected stream you control and enter its valid development token. The public sample is not bearer-protected and does not verify authenticated playback.
 
 ## Continuous Integration
 
-GitHub Actions is configured to run the Swift package tests and demo unit/UI tests on an iOS Simulator using the Xcode 27 runner. The hosted Xcode 27 image is currently a public preview, and a hosted run of the latest workflow state is pending. Latest local validation passed the package tests and four demo unit tests on iPhone 17 Pro / iOS 26.5; the UI test run stalled on Xcode debugger-version lookup warnings and was interrupted, so no latest UI test result is claimed.
+The focused managed-player fullscreen-exit regression test passed on a connected iPhone 12 running iOS 27.0.1 when the demo was temporarily resolved against the local StreamKit package. The test verifies playback is still active after exiting AVKit fullscreen. The demo's current resolution points to remote StreamKit `ff09134`, so it does not yet contain the local fix. The full package suite and full demo UI suite were not rerun for this fix; see the [current code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) for exact scope and limits.

@@ -1,6 +1,24 @@
 {
-  "originHash" : "dd47d9ab2b1cfe49f25ef23b6d2cc5709bfa722c67b7ca11397a133436f78e7e",
+  "originHash" : "f32f159db7237b8c581ebf32cd723283b44d06fea1517b40fec9ce7f4e67c245",
   "pins" : [
+    {
+      "identity" : "streamkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/issawi-iheb/StreamKit.git",
+      "state" : {
+        "branch" : "ads/discovery",
+        "revision" : "ff091341b928fc3d6ca0a482c9d28bd976a40e5d"
+      }
+    },
+    {
+      "identity" : "streamkitima",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/issawi-iheb/StreamKitIMA.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "f6e8c6b392634c3af4e0bb6c7eaa28b024834758"
+      }
+    },
     {
       "identity" : "swift-package-manager-google-interactive-media-ads-ios",
       "kind" : "remoteSourceControl",

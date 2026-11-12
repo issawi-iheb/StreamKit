@@ -160,15 +160,39 @@ extension StreamAVPlayerPresentationController: AVPlayerViewControllerDelegate {
 
         // Resume as soon as AVKit pauses, not when the transition ends.
         fullscreenExitObservation = player.observe(\.timeControlStatus) { player, _ in
-            if player.timeControlStatus == .paused {
-                player.play()
+            guard player.timeControlStatus == .paused else { return }
+
+            Task { @MainActor [weak self, weak controller] in
+                guard let self, let controller else { return }
+                guard controller.snapshot.intent == .play else {
+                    self.fullscreenExitObservation?.invalidate()
+                    self.fullscreenExitObservation = nil
+                    return
+                }
+
+                // Keep AVKit's exit pause from becoming the controller's
+                // transport state, while respecting interruptions and ad breaks.
+                await controller.reconcileTransportIntent()
             }
         }
 
-        coordinator.animate(alongsideTransition: nil) { [weak self, weak player] _ in
-            self?.fullscreenExitObservation = nil
-            // Fallback in case the pause landed after the observer was removed.
-            if player?.timeControlStatus == .paused { player?.play() }
+        coordinator.animate(alongsideTransition: nil) { [weak self, weak controller, weak player] _ in
+            guard let self, let controller, let player else { return }
+
+            guard controller.snapshot.intent == .play else {
+                self.fullscreenExitObservation?.invalidate()
+                self.fullscreenExitObservation = nil
+                return
+            }
+
+            if player.timeControlStatus == .paused {
+                Task { @MainActor in
+                    await controller.reconcileTransportIntent()
+                }
+            } else if player.timeControlStatus == .playing {
+                self.fullscreenExitObservation?.invalidate()
+                self.fullscreenExitObservation = nil
+            }
         }
     }
     
