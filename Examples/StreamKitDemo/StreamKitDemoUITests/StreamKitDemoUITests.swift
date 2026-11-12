@@ -286,6 +286,87 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testGoogleIMASampleStartsAnAdBreakOnEveryPlayerSurface() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        tapMenuEntry("demo.google-ima-vast", in: app)
+
+        let surfacePicker = app.segmentedControls["imaVAST.surfacePicker"]
+        let adState = app.descendants(matching: .any)
+            .matching(identifier: "imaVAST.adState")
+            .firstMatch
+
+        for surface in ["Managed", "Advanced", "AVKit"] {
+            let surfaceButton = surfacePicker.buttons[surface]
+            revealAndTap(surfaceButton, in: app)
+
+            let loadButton = app.buttons["imaVAST.load"]
+            waitUntilEnabled(loadButton, timeout: 15)
+            let adStarted = adBreakStartedExpectation(for: adState)
+            revealAndTap(loadButton, in: app)
+
+            XCTAssertEqual(
+                XCTWaiter.wait(for: [adStarted], timeout: 35),
+                .completed,
+                "Expected the Google IMA sample ad break on the \(surface) surface.\n\(app.debugDescription)"
+            )
+            XCTAssertTrue(
+                waitForLabel(adState, containing: "Not active", timeout: 60),
+                "Expected the Google IMA sample ad break to finish before changing surfaces."
+            )
+        }
+    }
+
+    @MainActor
+    func testHLSInterstitialSampleRemainsActiveAcrossPlayerSurfaces() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        tapMenuEntry("demo.hls-interstitial-ads", in: app)
+
+        let surfacePicker = app.segmentedControls["hlsInterstitialSurfacePicker"]
+        let adState = app.descendants(matching: .any)
+            .matching(identifier: "hlsInterstitialAdState")
+            .firstMatch
+        let surfaceDescriptions = [
+            "Managed": "Managed session with AVKit controls.",
+            "Advanced": "StreamPlayerController with StreamVideoView and app-owned controls.",
+            "AVKit": "Explicit AVKit presentation controller and native controls."
+        ]
+
+        for (index, surface) in ["Managed", "Advanced", "AVKit"].enumerated() {
+            if index > 0 {
+                revealAndTap(surfacePicker.buttons[surface], in: app)
+                XCTAssertTrue(
+                    app.staticTexts[surfaceDescriptions[surface]!].waitForExistence(timeout: 5),
+                    "Expected the \(surface) surface to be selected.\n\(app.debugDescription)"
+                )
+            }
+
+            let loadButton = app.buttons["hlsInterstitialLoad"]
+            waitUntilEnabled(loadButton, timeout: 15)
+            let adStarted = adBreakStartedExpectation(for: adState)
+            revealAndTap(loadButton, in: app)
+            XCTAssertEqual(
+                XCTWaiter.wait(for: [adStarted], timeout: 80),
+                .completed,
+                "Expected the Apple HLS interstitial sample break on the \(surface) surface.\n\(app.debugDescription)"
+            )
+
+            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            screenshot.name = "HLS interstitial on \(surface) surface"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+
+            XCTAssertTrue(
+                waitForLabel(adState, containing: "Not active", timeout: 40),
+                "Expected the Apple HLS sample interstitial to finish on the \(surface) surface."
+            )
+        }
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
@@ -329,5 +410,40 @@ final class StreamKitDemoUITests: XCTestCase {
         )
 
         return entry
+    }
+
+    @MainActor
+    private func revealAndTap(_ element: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<6 {
+            if element.isHittable { break }
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(element.isHittable, "Expected element to be visible: \(element.identifier)")
+        element.tap()
+    }
+
+    @MainActor
+    private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval) {
+        let enabled = NSPredicate(format: "isEnabled == true")
+        let expectation = XCTNSPredicateExpectation(predicate: enabled, object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: timeout), .completed)
+    }
+
+    @MainActor
+    private func waitForLabel(
+        _ element: XCUIElement,
+        containing text: String,
+        timeout: TimeInterval
+    ) -> Bool {
+        let containsText = NSPredicate(format: "label CONTAINS[c] %@", text)
+        let expectation = XCTNSPredicateExpectation(predicate: containsText, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    @MainActor
+    private func adBreakStartedExpectation(for element: XCUIElement) -> XCTestExpectation {
+        let isPlaying = NSPredicate(format: "label CONTAINS[c] %@", "Playing")
+        return XCTNSPredicateExpectation(predicate: isPlaying, object: element)
     }
 }

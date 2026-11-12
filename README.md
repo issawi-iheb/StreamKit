@@ -587,7 +587,7 @@ See the [advertising architecture](Documentation/Architecture.md#advertising-arc
 - iOS only (no macOS/tvOS/watchOS support)
 - AVFoundation-based playback only
 - No StreamKit-designed custom controls; use the managed AVKit view or build app-owned controls with `StreamVideoView`
-- No ad vendor dependency in core. HLS interstitial monitoring and provider-neutral client-side orchestration are implemented; Google IMA is an optional package. Core regression tests cover seek restrictions and key client-side session lifecycle cases; real ad-tag and IMA/HLS demo acceptance across every surface still require broader verification.
+- No ad vendor dependency in core. HLS interstitial monitoring and provider-neutral client-side orchestration are implemented; Google IMA is an optional package. Public IMA and HLS sample flows have been checked on iPhone 12 across the managed, AVKit, and custom video surfaces. Production ad tags and broader device/OS acceptance still need verification.
 - StreamKit does not provide a full playback-controls UI or set a package-wide orientation policy. Pair `StreamVideoView` with `StreamPictureInPictureController` for app-owned controls, or use `StreamAVPlayerView` for AVKit's standard controls. The demo requests landscape for its custom fullscreen mode.
 - Offline playback requires application-level file handling
 

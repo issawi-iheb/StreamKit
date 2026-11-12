@@ -1,6 +1,6 @@
 # StreamKit Roadmap
 
-> **Current code status — 2026-11-12:** Advertising has a provider-neutral client-side contract, an optional Google IMA adapter, and a separate HLS interstitial path. The fullscreen-exit fix is committed in `935cc42`, passed on iPhone 12 / iOS 27.0.1, and is pinned by the demo lockfile. Managed views mount the client-side ad host automatically; direct AVKit and custom video surfaces require the host app to mount it. The post-await seek/ad-break race now has a package fix and regression tests, and raw IMA error text is no longer logged. IMA/HLS demo acceptance across every supported surface remains open. See [the current branch code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) and [advertising architecture](Documentation/Architecture.md#advertising-architecture).
+> **Current code status — 2026-11-12:** Advertising has a provider-neutral client-side contract, an optional Google IMA adapter, and a separate HLS interstitial path. The fullscreen-exit fix is committed in `935cc42`, passed on iPhone 12 / iOS 27.0.1, and is pinned by the demo lockfile. Managed views mount the client-side ad host automatically; direct AVKit and custom video surfaces require the host app to mount it. The seek/ad-break race has a package fix and regression tests, and raw IMA error text is no longer logged. Public IMA and HLS samples now pass focused checks across all three demo surfaces on iPhone 12 / iOS 27.0.1; production tags and broader OS/device acceptance remain open. See [the current branch code audit](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) and [advertising architecture](Documentation/Architecture.md#advertising-architecture).
 
 ## PROJECT GOAL
 
@@ -130,15 +130,15 @@ separate integration boundaries for DRM and advertising.
 - **Implemented** — Optional `StreamKitIMA` Google IMA adapter with a separate IMA loader/manager session per player.
 - **Implemented** — HLS interstitial event monitoring through AVFoundation, separate from client-side providers.
 - **Fixed and device-verified** — AVKit fullscreen exit playback; focused regression test passed on iPhone 12 / iOS 27.0.1. The demo lockfile pins commit `935cc42`.
-- **In progress** — Package tests cover independent sessions/containers, source replacement, break start/end, user pause, shutdown, and seeks spanning a break start. Provider-backed ad display and IMA/HLS demo behavior across each surface still need focused acceptance.
+- **In progress** — Package tests cover independent sessions/containers, source replacement, break start/end, user pause, shutdown, seeks spanning a break start, initial-decision timeout, and session failure. Public IMA and HLS sample flows are device-checked across Managed, Advanced, and AVKit on iPhone 12 / iOS 27.0.1; production tags and additional device/OS combinations remain to be accepted.
 
 ### ACCEPTANCE CRITERIA:
-- **Implemented; acceptance incomplete** — Managed retained-session, advanced (`StreamPlayerController` + `StreamVideoView`), and AVKit (`StreamAVPlayerView`) integration paths exist. Real ad playback across every path still needs verification.
+- **Implemented; sample-device verified** — Managed retained-session, advanced (`StreamPlayerController` + `StreamVideoView`), and AVKit (`StreamAVPlayerView`) paths played the public sample ads on iPhone 12 / iOS 27.0.1. Production ad tags and broader device/OS acceptance remain open.
 - **Implemented** — HLS interstitial and client-side ad integration boundaries are separate and defined.
 - **Implemented** — Ad playback events and transitions are modeled.
 - **Fixed and package-tested** — Seek restrictions are rechecked after asynchronous engine seeks; a break that begins during a forward or live-edge seek restores the prior content position and returns `.adPlaybackRestricted`.
-- **Implemented; acceptance incomplete** — Optional Google IMA provider exists and no longer logs raw IMA error messages. Real-provider playback, timeout/failure behavior, and lifecycle acceptance remain open.
-- **In progress** — Regression tests cover seek races and core session lifecycle behavior. Decision timeout, provider failure, and focused IMA/HLS demo checks across all player surfaces remain to be verified.
+- **Implemented; sample-device verified** — Optional Google IMA provider plays the public VAST sample across the three demo surfaces on iPhone 12 / iOS 27.0.1 and no longer logs raw IMA error messages. Production tags, no-fill/failure handling, and broader lifecycle acceptance remain open.
+- **Implemented and package-tested; sample-device verified** — Regression tests cover seek races, initial-decision timeout, provider-session failure, and core session lifecycle. Public IMA/HLS demo checks across surfaces passed on one physical device; wider OS/device coverage remains.
 
 ## PHASE 5 — Advanced playback and presentation
 
@@ -178,6 +178,6 @@ separate integration boundaries for DRM and advertising.
 
 - **Latest implementation commit**: `42e805c` (`Fix seek races during client-side ad breaks`) on `ads/discovery`.
 - **Current phase**: Phase 3 — normalized lifecycle diagnostics and iOS 18+ AVMetrics enrichment are implemented. Analytics-provider integrations remain deferred. Shared diagnostics UI is available on managed, custom-controls, and AVKit/PiP routes; FairPlay has its own request report. Additional example routes remain to be wired. Phase 1 production-readiness and Phase 2 provider-specific acceptance gaps remain open.
-- **Latest local verification (2026-11-12)**: 26 focused package tests passed across ad-break, client-side integration, and ad-coordinator suites. IMA/HLS demo checks across each player surface remain outstanding; no new demo/device acceptance is claimed here.
+- **Latest local verification (2026-11-12)**: 26 focused package tests passed across ad-break, client-side integration, and ad-coordinator suites. Focused IMA and HLS sample UI tests passed across Managed, Advanced, and AVKit on iPhone 12 / iOS 27.0.1; the Xcode demo resolution used StreamKit `935cc42` and StreamKitIMA `f6e8c6b`. Production tags and other device/OS combinations were not tested.
 - **Current audit**: [AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md](AUDIT_REPORTS/13_CURRENT_BRANCH_CODE_AUDIT.md) is the single current source-based audit. Production-readiness work remains open as listed in that report.
 - **Next milestone**: Complete the Reliability and developer observability target above. Ads and offline playback remain product decisions, not assumed feature-parity commitments.

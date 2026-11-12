@@ -199,7 +199,7 @@ flowchart TB
 
 The IMA adapter waits for the container to become displayable, then creates an IMA display container from the host view and view controller and binds the ad playhead to that player's `AVPlayer`. This gives concurrent players separate IMA loaders/managers and separate display containers. Source replacement invalidates the previous session through controller lifecycle handling. Adapter error logging keeps the error type and numeric code and omits the raw IMA message, which may contain request or response details.
 
-HLS interstitials do not pass through `ClientSideAdProvider` or `StreamKitIMA`. AVFoundation observes interstitial events from the HLS item, and StreamKit maps them into common ad-break state. The demo exposes both routes; ad-tag/device/lifecycle coverage remains narrower than the implementation surface.
+HLS interstitials do not pass through `ClientSideAdProvider` or `StreamKitIMA`. AVFoundation observes interstitial events from the HLS item, and StreamKit maps them into common ad-break state. Public IMA and HLS sample routes have been exercised across the managed, AVKit, and custom video surfaces on one iPhone; production ad-tag and broader device/OS lifecycle acceptance remains open.
 
 ### Managed-player feature coverage and ownership
 
