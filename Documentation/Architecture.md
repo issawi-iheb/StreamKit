@@ -95,13 +95,15 @@ The following captures are shared with the README. They illustrate the home and 
 - `PlaybackEngine` and `AudioInterruptionSource` are internal seams injected by tests. They are not public backend/plugin APIs. The public injection point for app policy is `AudioPlaybackFocusCoordinator`; the host may share it across controllers that should arbitrate playback.
 - There is one AVPlayer/engine per controller. Instances are independent unless the host explicitly shares the audio-focus coordinator or a PiP controller for the matching rendered player.
 
-## PlaybackCore Responsibilities
+## Public API Models and Contracts
 - `PlaybackIntent`: Describes what the application wants (play/pause)
 - `PlaybackPhase`: Describes what the player is currently doing
 - `PlaybackSnapshot`: Captures playback state at a point in time
 - `PlaybackFailure`: Carries normalized playback error information
 - `MediaBearerAuthentication`: Supplies per-resource bearer tokens scoped to exact HTTPS hosts
 - `FairPlayConfiguration` and `FairPlayLicenseProvider`: Bind a source to the app-owned FairPlay certificate/content-ID/license-server integration
+
+Public declarations are grouped under `Sources/StreamKit/PublicAPI/` by playback, media, advertising, presentation, and diagnostics. Engine implementations, reducers, and coordination helpers live under `Sources/StreamKit/Internal/`. These folders clarify ownership; Swift access control remains the authority for visibility.
 
 ## Separation of Concerns
 - **PlaybackIntent** (application-driven) is independent of **PlaybackPhase** (player-driven)

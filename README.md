@@ -28,6 +28,10 @@ StreamKit offers three integration levels:
 
 Start with the managed player unless you need app-owned controls or explicit presentation lifecycle handling. VOD, live/DVR, bearer-authenticated HLS, cookies, user agent, and FairPlay are configured on `MediaSource`; choosing the managed entry point does not remove those capabilities. See [Architecture.md](Documentation/Architecture.md) for ownership boundaries.
 
+## Package organization
+
+The package groups exported declarations under `Sources/StreamKit/PublicAPI/`, organized by playback, media, advertising, diagnostics, and presentation. Playback engines, state coordination, media loaders, and platform helpers live under `Sources/StreamKit/Internal/`. The folder names make ownership easier to navigate; Swift access modifiers determine what clients can use. Tests follow the same feature areas under `Tests/StreamKitTests/`. See [Contributing.md](Documentation/Contributing.md) for the source map and guidance on where changes belong.
+
 ## Demo tour
 
 The demo keeps the integration paths distinct while sharing a consistent visual system for navigation cards, setup panels, and playback actions.

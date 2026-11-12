@@ -10,8 +10,6 @@ import Combine
 import SwiftUI
 import UIKit
 
-/// Owns AVKit presentation and restoration state for one playback session.
-/// Retain it outside the player screen so it survives SwiftUI view removal.
 @MainActor
 public final class StreamAVPlayerPresentationController: NSObject, ObservableObject {
     @Published public private(set) var state: StreamPictureInPictureState = .idle {

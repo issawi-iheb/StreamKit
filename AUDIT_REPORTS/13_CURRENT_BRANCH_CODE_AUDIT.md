@@ -39,7 +39,7 @@ No full package suite or full demo UI suite was run for the fullscreen fix. Do n
 - Optional adapter: `StreamKitIMA` depends on StreamKit branch `ads/discovery` and Google IMA from 3.33.0. It is a separate package/product, which keeps the core dependency graph free of the vendor SDK.
 - The demo Xcode project uses branch references for StreamKit and StreamKitIMA while its current `Package.resolved` pins StreamKit `935cc42`, StreamKitIMA `f6e8c6b`, and Google IMA `3.34.1`. The lockfile makes this checkout resolution specific, but branch references still float on future updates; release validation should use immutable tags/commits and document the exact adapter/core compatibility pair.
 - Demo deployment target is iOS 26.5, above the package's iOS 18 minimum. Current demo builds therefore cannot prove the minimum supported OS.
-- The main module is organized by public API, playback core, and internal support. The controller is a substantial orchestration point, but current source does not establish a stable second backend or responsibility boundary that warrants a broad refactor. Keep seams internal unless a concrete second backend or public extension need appears.
+- The main module keeps public declarations under `Sources/StreamKit/PublicAPI/` and internal implementations under `Sources/StreamKit/Internal/`, grouped by playback, media, advertising, diagnostics, and presentation. The controller is a substantial orchestration point, but current source does not establish a stable second backend or responsibility boundary that warrants a broad refactor. Keep seams internal unless a concrete second backend or public extension need appears.
 
 ## Samples and coverage
 
@@ -52,7 +52,7 @@ No full package suite or full demo UI suite was run for the fullscreen fix. Do n
 
 | Priority | Finding | Code evidence | Recommended next action |
 |---|---|---|---|
-| P2 | Ad acceptance remains limited to public samples and one physical device. No-fill/customer-tag behavior, provider-backed failures, and supported-OS/device combinations are not established by the sample UI run. | `Examples/StreamKitDemo/StreamKitDemo/IMAVASTDemoView.swift`, `HLSInterstitialDemoView.swift`, `Sources/StreamKit/InternalSupport/ClientSideAdCoordinator.swift` | Validate controlled no-fill/failure tags and repeat surface checks on supported OS/device combinations; keep sample verification distinct from production acceptance. |
+| P2 | Ad acceptance remains limited to public samples and one physical device. No-fill/customer-tag behavior, provider-backed failures, and supported-OS/device combinations are not established by the sample UI run. | `Examples/StreamKitDemo/StreamKitDemo/IMAVASTDemoView.swift`, `HLSInterstitialDemoView.swift`, `Sources/StreamKit/Internal/Advertising/ClientSideAdCoordinator.swift` | Validate controlled no-fill/failure tags and repeat surface checks on supported OS/device combinations; keep sample verification distinct from production acceptance. |
 | P2 | Minimum deployment is not demonstrated by the demo target. | `Package.swift` vs demo Xcode deployment setting | Add an iOS 18 package build/test lane and record device/runtime coverage separately. |
 | P3 | Demo package references float branches. | Demo `.pbxproj` and `Package.resolved` | Pin tagged or immutable revisions in release/CI workflows. |
 
@@ -64,9 +64,9 @@ No full package suite or full demo UI suite was run for the fullscreen fix. Do n
 
 ## Source map
 
-- Core public API: `Sources/StreamKit/PublicAPI/`
-- Playback engine and AVFoundation event bridge: `Sources/StreamKit/PlaybackCore/`
-- Client-side ad coordinator: `Sources/StreamKit/InternalSupport/ClientSideAdCoordinator.swift`
+- Public SDK surface: `Sources/StreamKit/PublicAPI/`
+- Playback engine and AVFoundation event bridge: `Sources/StreamKit/Internal/Playback/Engine/`
+- Client-side ad coordinator: `Sources/StreamKit/Internal/Advertising/ClientSideAdCoordinator.swift`
 - IMA adapter: `../../StreamKitIMA/Sources/StreamKitIMA/GoogleIMAAdProvider.swift`
 - Demo ad routes: `Examples/StreamKitDemo/StreamKitDemo/IMAVASTDemoView.swift`, `HLSInterstitialDemoView.swift`
 - Current diagrams and integration guidance: `Documentation/Architecture.md`
