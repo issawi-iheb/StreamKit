@@ -6,7 +6,8 @@ import SwiftUI
 ///
 /// The session loads its initial source automatically. Keep the
 /// `StreamPlayerSession` in an owner above this view if Picture in Picture
-/// should survive navigation away from the player.
+/// should survive navigation away from the player. For client-side ads, this
+/// view mounts the session's ad display container automatically.
 @MainActor
 public struct StreamPlayerView: View {
     @StateObject private var session: StreamPlayerSession
@@ -51,10 +52,23 @@ public struct StreamPlayerView: View {
                 session.automaticallyStartsPictureInPictureWhenLeavingApp
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay {
+            if hasClientSideAds {
+                ClientSideAdContainerHost(
+                    container: session.controller.clientSideAdContainer
+                )
+            }
+        }
         .onDisappear {
             guard shutsDownSessionOnDisappear else { return }
             Task { try? await session.shutdown() }
         }
+    }
+
+    private var hasClientSideAds: Bool {
+        guard let adMode = session.source.adMode else { return false }
+        if case .clientSide = adMode { return true }
+        return false
     }
 }
 

@@ -14,7 +14,7 @@ For a practical source map and change guide, see [Contributing to StreamKit](Con
 
 | Path | Entry point | Host owns |
 | --- | --- | --- |
-| Managed | `StreamPlayerView(source:configuration:)` | Source/provider configuration and app audio-session policy; StreamKit owns the screen-scoped session and AVKit surface |
+| Managed | `StreamPlayerView(source:configuration:)` | Source/provider configuration and app audio-session policy; StreamKit owns the screen-scoped session, AVKit surface, and client-side ad display host |
 | App-owned controls | `StreamPlayerController` + `StreamVideoView` | Layout, controls, track UI, and controller lifetime; use `StreamPictureInPictureController` when custom PiP is needed |
 | Advanced AVKit | Retained `StreamPlayerSession` or `StreamAVPlayerView` + presentation controller | Route retention/restoration and explicit AVKit presentation lifecycle |
 
@@ -177,7 +177,7 @@ flowchart TB
     HostApp[Host app] -->|creates and retains when needed| ManagedSession[StreamPlayerSession]
     ManagedSession -->|owns| Controller[StreamPlayerController]
     HostApp -->|configures MediaSource| Controller
-    HostApp -->|mounts explicitly| AdHost[ClientSideAdContainerHost]
+    HostApp -->|mounts for custom surfaces| AdHost[ClientSideAdContainerHost]
     Controller -->|owns per player| AdContainer[ClientSideAdContainer]
     AdHost -->|attaches to| AdContainer
     Controller -->|calls for each client-side source load| Provider[GoogleIMAAdProvider in StreamKitIMA]
@@ -189,11 +189,13 @@ flowchart TB
     Controller -->|same AVPlayer| Surface
     Surface --> Video[StreamVideoView]
     Surface --> AVKit[StreamAVPlayerView]
-    Surface --> Managed[StreamPlayerView using retained StreamPlayerSession]
+    Surface --> Managed[StreamPlayerView]
+    Managed -->|mounts automatically for client-side ads| ManagedAdHost[ClientSideAdContainerHost]
+    ManagedAdHost --> AdContainer
     HLS[HLS interstitial metadata] -->|AVFoundation event monitor| Controller
 ```
 
-`StreamPlayerSession` constructs and owns its `StreamPlayerController`; the controller owns its `ClientSideAdContainer` and coordinates the provider session for that player's active source. The host app must mount `ClientSideAdContainerHost(container:)` in the view hierarchy alongside the matching surface. The SDK does not insert this host automatically. A managed `StreamPlayerView(source:)` hides its internally created session, so client-side ads with the managed surface require the retained-session initializer, `StreamPlayerView(session:)`, to mount the corresponding ad host.
+`StreamPlayerSession` constructs and owns its `StreamPlayerController`; the controller owns its `ClientSideAdContainer` and coordinates the provider session for that player's active source. Both managed `StreamPlayerView` initializers automatically mount `ClientSideAdContainerHost` when the current source uses client-side ads. For direct `StreamVideoView` or `StreamAVPlayerView` composition, the host app mounts `ClientSideAdContainerHost(container:)` alongside the matching surface. The host is only mounted for client-side ads; HLS interstitials do not need this display container.
 
 The IMA adapter waits for the container to become displayable, then creates an IMA display container from the host view and view controller and binds the ad playhead to that player's `AVPlayer`. This gives concurrent players separate IMA loaders/managers and separate display containers. Source replacement invalidates the previous session through controller lifecycle handling. The provider adapter currently logs some vendor diagnostics; raw IMA error messages can include request or response details and should be redacted before production logging.
 

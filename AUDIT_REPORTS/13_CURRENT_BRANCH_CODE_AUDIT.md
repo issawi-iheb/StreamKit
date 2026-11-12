@@ -18,7 +18,7 @@ The fullscreen-exit playback defect is **fixed in commit `ce29826` and verified 
 | Regression assertion | **Committed** | `testManagedPlayerCanEnterAndExitFullscreen` checks post-exit playback state, not only route return. |
 | Core dependency isolation | **Confirmed by source** | Root `Package.swift` has no external package dependencies. Google IMA is in sibling package `StreamKitIMA`. |
 
-No full package suite or full demo UI suite was run for this change. Do not read the focused device result as full-suite or release acceptance.
+No full package suite or full demo UI suite was run for the fullscreen fix. Do not read the focused device result as full-suite or release acceptance.
 
 ## Architecture and integration
 
@@ -26,9 +26,9 @@ No full package suite or full demo UI suite was run for this change. Do not read
 - **The three player surfaces share the playback controller/player.** `StreamVideoView` renders an `AVPlayerLayer`; `StreamAVPlayerView` wraps AVKit; `StreamPlayerView` renders a managed session.
 - **UIKit is justified for these surfaces.** UIKit appears at SwiftUI representable boundaries, AVKit delegate APIs, process application state, and IMA's `UIView`/`UIViewController` display context. Removing UIKit would mean changing current product capabilities or maintaining alternate render/presentation implementations. A separate headless target only makes sense if a UIKit-free integration is an actual product goal; the current iOS-only single product is reasonable.
 - **Ads follow per-player isolation.** The controller invokes the configured provider for each client-side source load and passes that controller's player and ad container. `GoogleIMAAdProvider.makeSession` returns a new private IMA session with its own loader/manager. Source replacement invalidates its prior session.
-- **The host app supplies the ad display host.** `ClientSideAdContainerHost` must be mounted as an overlay alongside the matching surface. `StreamPlayerView(source:)` hides its internally created session; client-side ads with the managed surface need a retained `StreamPlayerSession` and `StreamPlayerView(session:)` so the app can mount that session's container.
+- **Managed ads mount their display host automatically.** Both `StreamPlayerView` initializers add `ClientSideAdContainerHost` when the session source uses client-side ads. Direct `StreamVideoView` or `StreamAVPlayerView` compositions still require the host app to mount the matching container alongside that player.
 - **HLS interstitials are a separate route.** AVFoundation item events are monitored and normalized by core; they do not flow through Google IMA or `ClientSideAdProvider`.
-- **The supplied diagram is substantially aligned after two corrections.** Reverse its `StreamPlayerController → Managed StreamPlayerSession` ownership arrow to `StreamPlayerSession → StreamPlayerController`. Show the app explicitly mounting the ad host; player surfaces do not mount it automatically. The refreshed [architecture document](../Documentation/Architecture.md#advertising-architecture) includes these boundaries and the separate HLS route.
+- **The supplied diagram is substantially aligned after two corrections.** Reverse its `StreamPlayerController → Managed StreamPlayerSession` ownership arrow to `StreamPlayerSession → StreamPlayerController`. Managed `StreamPlayerView` mounts the ad host internally; the app mounts it explicitly only for custom surface compositions. The refreshed [architecture document](../Documentation/Architecture.md#advertising-architecture) includes these boundaries and the separate HLS route.
 
 ## Dependencies and project management
 
@@ -41,7 +41,7 @@ No full package suite or full demo UI suite was run for this change. Do not read
 ## Samples and coverage
 
 - Demo routes now include managed playback, custom controls, advanced AVKit/PiP, live/DVR, multiple players, audio/interruption, bearer authentication, FairPlay, HLS interstitials, and IMA/VAST.
-- The IMA route explicitly overlays the appropriate `ClientSideAdContainerHost` for its AVKit and managed-session compositions. That sample is useful for integration guidance but does not establish broad concurrent-player or provider-replacement acceptance.
+- The IMA route now relies on `StreamPlayerView` to mount its container for the managed surface and explicitly mounts it for the AVKit and custom-control surfaces. That sample is useful for integration guidance but does not establish broad concurrent-player or provider-replacement acceptance.
 - Focused fullscreen-exit device test passed as described above. Package and complete UI suites were not rerun for this audit update.
 - Ads need explicit tests for no-fill/timeout, failure/fail-open, break pause/resume and user pause, source replacement, simultaneous sessions, each exposed surface, and HLS interstitial transitions.
 

@@ -300,9 +300,11 @@ private struct IMAVASTPlayerSection: View {
                 )
             }
 
-            ClientSideAdContainerHost(
-                container: session.controller.clientSideAdContainer
-            )
+            if selectedSurface != .managed {
+                ClientSideAdContainerHost(
+                    container: session.controller.clientSideAdContainer
+                )
+            }
         }
     }
 }
