@@ -85,6 +85,12 @@ final class ControlledOrigin: @unchecked Sendable {
         recordedRequest(path: path) != nil
     }
 
+    func requestCount(path: String) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests.filter { $0.url?.path == path }.count
+    }
+
     private func recordedRequest(path: String) -> URLRequest? {
         lock.lock()
         defer { lock.unlock() }

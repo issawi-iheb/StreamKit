@@ -52,6 +52,54 @@ struct AuthenticatedMediaResourceLoaderIntegrationTests {
         try await origin.waitForCompletion(path: "/segment.ts")
     }
 
+    @Test("401 and 403 responses fail without retrying the resource request")
+    func rejectedCredentialsFailWithoutRetry() async throws {
+        for statusCode in [401, 403] {
+            let host = Self.uniqueHost(prefix: "rejected-credentials")
+            let origin = ControlledOrigin(
+                host: host,
+                responses: [
+                    "/master.m3u8": .body(
+                        statusCode: statusCode,
+                        headers: ["Content-Type": "application/vnd.apple.mpegurl"],
+                        data: Data()
+                    )
+                ]
+            )
+            origin.register()
+            defer { origin.unregister() }
+
+            let engine = AVFoundationPlaybackEngine(
+                urlProtocolClassesForTesting: [ControlledOriginURLProtocol.self]
+            )
+            let controller = StreamPlayerController(engine: engine)
+            let load = controller.load(
+                Self.authenticatedSource(host: host, path: "/master.m3u8")
+            )
+
+            do {
+                let request = try await origin.waitForRequest(path: "/master.m3u8")
+                #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token")
+
+                do {
+                    try await load.waitUntilReady()
+                    Issue.record("The resource unexpectedly loaded after HTTP \(statusCode).")
+                } catch let failure as PlaybackFailure {
+                    #expect(failure.code == .authentication)
+                } catch {
+                    Issue.record("Unexpected load failure after HTTP \(statusCode): \(error)")
+                }
+
+                #expect(origin.requestCount(path: "/master.m3u8") == 1)
+            } catch {
+                await controller.shutdown()
+                throw error
+            }
+
+            await controller.shutdown()
+        }
+    }
+
     @Test("Redirects reapply credentials only for trusted destinations")
     func redirectRescopesCredentials() async throws {
         let sourceHost = Self.uniqueHost(prefix: "source")

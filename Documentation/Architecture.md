@@ -240,6 +240,7 @@ The managed view does not supply DRM credentials or infer whether a URL is live.
 - Bearer-authenticated media uses an `AVAssetResourceLoader` owned by the playback engine.
 - HLS playlist references are rewritten to the resource-loader scheme so tokens can be requested for segments, keys, and child playlists.
 - The async token provider is called per resource, allowing the host app to refresh credentials.
+- A `401` or `403` response fails that resource request; StreamKit does not automatically retry it. The host controls credential refresh and can start a new load with updated authorization when appropriate.
 - Exact host allowlisting and HTTPS-only transport prevent credentials from being sent to unrelated or cleartext origins.
 - The authenticated loader uses an ephemeral URL session with automatic cookie storage disabled; only explicitly configured `MediaCookie` values are attached.
 - Finite authenticated byte ranges require HTTP `206` and a matching `Content-Range`; nonzero requests through end-of-resource use an open-ended `Range`. The loader verifies response extent and byte count before finishing the AVFoundation request, and does not treat a ranged response's selected-byte count as the full resource length.

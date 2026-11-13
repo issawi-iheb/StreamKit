@@ -76,6 +76,42 @@ final class StreamKitDemoUITests: XCTestCase {
     }
 
     @MainActor
+    func testAxinomPublicVectorReachesPlayingOnDevice() throws {
+        #if targetEnvironment(simulator)
+        throw XCTSkip("The Axinom FairPlay provider check requires a physical device.")
+        #endif
+
+        let app = XCUIApplication()
+        app.launch()
+        tapMenuEntry("demo.axinom-fairplay", in: app)
+
+        let loadButton = app.buttons["fairPlayLoadProtectedStream"]
+        XCTAssertTrue(loadButton.waitForExistence(timeout: 5))
+        loadButton.tap()
+
+        let playingPhase = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "playing")
+        ).firstMatch
+        XCTAssertTrue(
+            playingPhase.waitForExistence(timeout: 90),
+            "The public Axinom vector did not reach the playing phase."
+        )
+
+        let diagnostics = app.staticTexts["fairPlayRequestDiagnostics"]
+        let acceptedResponse = NSPredicate(
+            format: "label CONTAINS %@",
+            "AVFoundation accepted the FairPlay content-key response"
+        )
+        expectation(for: acceptedResponse, evaluatedWith: diagnostics)
+        waitForExpectations(timeout: 15)
+
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "Axinom FairPlay public vector playing"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testPresentationExampleShowsAVKitAndPictureInPictureOptions() throws {
         let app = XCUIApplication()
         app.launch()
